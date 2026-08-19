@@ -117,3 +117,63 @@ A restriction that must hold under an adversarial or confused model therefore
 needs a second layer — branch protection, CI checks, or review — not agent
 configuration alone. When adding a restriction, state which of the three modes
 actually enforce it; an unqualified claim will be wrong in at least one.
+
+## Backlog reads must fail closed in three distinguishable ways
+
+A backlog read has three outcomes that must never collapse into one, because
+each sends the reader after a different bug:
+
+- **not found** — a fact about the backlog. The epic does not exist.
+- **unavailable** — an absence of knowledge. Bad credentials, a missing API
+  scope, an unreachable host, no `gh` on PATH. Says nothing about the epic.
+- **corrupt** — the epic is present but unreadable.
+
+Reporting corruption as absence is the worst of the three: it hides the
+artifact from the one person who could repair it. Reporting a 403 as absence
+points the reader at the epic when the fix is in the workflow permissions.
+`BacklogUnavailableError` and `EpicCorruptError` exist for exactly this, and
+`ai-sdlc status` gives each its own exit code — six in total, no aliasing,
+because a required check that cannot separate "not approved" from "could not
+check" lets an outage read as a policy decision.
+
+Corruption arrives in two shapes with opposite symptoms: `parse` *throws* on
+YAML syntax errors, while `safeParse` *returns* a failure on YAML that parses
+but violates the schema. Guarding only the second leaves the first an uncaught
+crash. Both are reachable by hand-editing an issue in the GitHub UI, which is
+the likeliest real corruption path.
+
+## Do not filter the GitHub identity lookup by label
+
+`findIssue` deliberately omits `--label`, though every epic carries one.
+Passing it makes the lookup a *search* query, and GitHub's search index trails
+the issue store: measured against the live API, an issue created by `save`
+stayed invisible to a label-filtered list for ~7.7s while the unfiltered list
+returned it immediately. Read-after-write — save an epic, then approve it — is
+this provider's normal shape, so a lagging lookup meant `get` reporting a
+just-created epic as nonexistent. The label stays for humans filtering in the
+UI; correctness must not depend on it.
+
+The status label is likewise a projection, never a source. The fenced artifact
+wins on read, and `list` re-filters on it so a stale label causes neither a
+wrong include nor a wrong exclude.
+
+## Workflow token scopes follow the backlog kind
+
+The generated workflow grants `issues: read` and passes `GH_TOKEN` only when
+the backlog is `github-issues`. Verified in Actions rather than assumed: with
+`contents: read` alone the Issues API returns 403 and the gate cannot resolve
+the epic at all. Granting the scope unconditionally would hand API access to
+the filesystem backend, which never uses it.
+
+`gh` does honour `GITHUB_TOKEN` — an invalid value yields `HTTP 401`, so it is
+not being ignored — but Actions does not place the token in the environment
+unless the workflow passes it.
+
+## Re-approval requires a fresh approver
+
+`setStatus('APPROVED')` overwrites the approval block from its `actor` argument
+instead of inheriting whatever was there. Downgrading to `CHANGES_REQUESTED`
+leaves the old block in place, so inheriting would let a previously-approved
+epic return to APPROVED carrying a stale approver — approval by history rather
+than by decision. The schema refinement rejects APPROVED without both fields,
+which makes the omission a hard failure rather than a silent one.

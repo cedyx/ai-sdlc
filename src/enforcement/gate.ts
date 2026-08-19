@@ -13,8 +13,12 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { Config } from '../schema/config.js';
-import { isImplementable } from '../schema/epic.js';
-import { makeBacklog } from '../backlog/provider.js';
+import { isImplementable, type Epic } from '../schema/epic.js';
+import {
+  BacklogUnavailableError,
+  EpicCorruptError,
+  makeBacklog,
+} from '../backlog/provider.js';
 import { EPIC_MARKER, extractEpicId, markerFailure } from './ci.js';
 
 /** Exit codes, distinct so a CI log tells you which step failed. */
@@ -23,6 +27,23 @@ export const EXIT = {
   notApproved: 1,
   notFound: 2,
   noMarker: 3,
+  /**
+   * The backlog could not be read: bad credentials, a missing API scope, an
+   * unreachable host, no `gh` on PATH.
+   *
+   * Separate from `notFound` because the two are opposite claims. Not-found
+   * asserts a fact about the backlog; this admits we learned nothing. Live
+   * exercise against the GitHub API showed why it matters: a token without
+   * `issues: read` produced "epic not found", pointing the reader at the epic
+   * instead of at the workflow permissions.
+   */
+  unavailable: 4,
+  /**
+   * The epic exists but its artifact is unreadable — usually a hand-edit in the
+   * GitHub UI that broke the fenced YAML. Distinct so the log says "repair this
+   * epic" rather than "create it".
+   */
+  corrupt: 5,
 } as const;
 
 export async function runGate(root: string, body: string | undefined): Promise<number> {
@@ -32,8 +53,39 @@ export async function runGate(root: string, body: string | undefined): Promise<n
     return EXIT.noMarker;
   }
 
-  const config = Config.parse(parse(await readFile(join(root, '.ai', 'config.yaml'), 'utf8')));
-  const epic = await makeBacklog(config, root).get(marker.id);
+  let epic: Epic | null;
+  try {
+    const config = Config.parse(parse(await readFile(join(root, '.ai', 'config.yaml'), 'utf8')));
+    epic = await makeBacklog(config, root).get(marker.id);
+  } catch (err) {
+    // Fail closed on every path, but never silently, and never as the wrong
+    // reason. A gate that cannot read the backlog must not pass, and must not
+    // claim the epic is missing.
+    if (err instanceof EpicCorruptError) {
+      console.error(
+        `${err.message}\n\n` +
+          'The epic exists but its ai-sdlc block could not be read. Repair the\n' +
+          'fenced YAML in the issue body; do not delete it.',
+      );
+      return EXIT.corrupt;
+    }
+    if (err instanceof BacklogUnavailableError) {
+      console.error(
+        `${err.message}\n\n` +
+          'The gate could not read the backlog, so it cannot confirm approval and\n' +
+          'fails closed. This is not a statement about the epic. Check credentials\n' +
+          'and, for the github-issues backend in Actions, that the workflow grants\n' +
+          '`issues: read`.',
+      );
+      return EXIT.unavailable;
+    }
+    console.error(
+      `${(err as Error).message}\n\n` +
+        'The gate could not complete its check and fails closed.',
+    );
+    return EXIT.unavailable;
+  }
+
   if (!epic) {
     console.error(
       `${EPIC_MARKER}: ${marker.id} names an epic that does not exist.\n\n` +

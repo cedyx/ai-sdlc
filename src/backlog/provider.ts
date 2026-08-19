@@ -45,6 +45,45 @@ export class EpicNotFoundError extends Error {
 }
 
 /**
+ * The backlog itself could not be reached or read.
+ *
+ * Distinct from `EpicNotFoundError` because the two demand opposite responses:
+ * a missing epic is a fact about the backlog, while this is an absence of
+ * knowledge. Collapsing them lets an expired token or a missing API scope be
+ * reported as "no such epic", which sends the reader looking for the wrong bug.
+ * Live exercise against the GitHub API produced exactly that: a 403 surfaced as
+ * a nonexistent epic.
+ */
+export class BacklogUnavailableError extends Error {
+  constructor(
+    readonly kind: string,
+    detail: string,
+  ) {
+    super(`${kind} backlog unavailable: ${detail}`);
+    this.name = 'BacklogUnavailableError';
+  }
+}
+
+/**
+ * An epic exists but its stored representation could not be understood.
+ *
+ * Also distinct from not-found, and for a sharper reason: the epic is *there*.
+ * Reporting corruption as absence hides the artifact from the person able to
+ * repair it. Raised for both malformed YAML and YAML that parses but violates
+ * the schema — a hand-edit in the GitHub UI produces either one.
+ */
+export class EpicCorruptError extends Error {
+  constructor(
+    readonly id: string,
+    kind: string,
+    detail: string,
+  ) {
+    super(`epic ${id} in ${kind} backlog is unreadable: ${detail}`);
+    this.name = 'EpicCorruptError';
+  }
+}
+
+/**
  * Constructs the provider named by config.
  *
  * Lives here rather than in the CLI because it is not a CLI concern: the CI gate

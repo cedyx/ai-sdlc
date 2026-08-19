@@ -92,7 +92,7 @@ async function generate(root: string): Promise<void> {
   // constrains what enters the repository, which is true whichever agent wrote
   // the code, or none. Making it provider-conditional would let removing a
   // provider quietly remove the enforcement boundary.
-  const ci = generateCiWorkflow();
+  const ci = generateCiWorkflow({ backlog: config.backlog.kind });
   await write(root, ci.path, ci.content);
 
   if (config.providers.includes('codex')) reportCodexFidelity(agents);

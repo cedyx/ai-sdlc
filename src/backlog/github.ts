@@ -2,7 +2,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { parse, stringify } from 'yaml';
 import { Epic, EpicStatus } from '../schema/epic.js';
-import { EpicNotFoundError, type BacklogProvider } from './provider.js';
+import {
+  BacklogUnavailableError,
+  EpicCorruptError,
+  EpicNotFoundError,
+  type BacklogProvider,
+} from './provider.js';
 
 const run = promisify(execFile);
 
@@ -38,35 +43,102 @@ export class GitHubIssuesBacklog implements BacklogProvider {
     return this.opts.epicLabel ?? 'epic';
   }
 
+  /**
+   * Runs `gh`, converting process failure into a typed backlog error.
+   *
+   * Without this, a 403 from a missing `issues: read` scope propagated as a raw
+   * execFile error and the CI gate died on a stack trace. Auth and permission
+   * problems are reported as unavailability, never as a missing epic: the gate
+   * must fail closed *and* say which of the two it hit.
+   */
   private async gh(args: string[]): Promise<string> {
-    const { stdout } = await run('gh', args, { maxBuffer: 10 * 1024 * 1024 });
-    return stdout;
+    try {
+      const { stdout } = await run('gh', args, { maxBuffer: 10 * 1024 * 1024 });
+      return stdout;
+    } catch (err) {
+      const e = err as { stderr?: string; message?: string; code?: string };
+      const detail = (e.stderr || e.message || String(err)).trim().split('\n')[0] ?? '';
+      if (e.code === 'ENOENT') {
+        throw new BacklogUnavailableError(this.kind, 'the gh CLI is not installed or not on PATH');
+      }
+      throw new BacklogUnavailableError(this.kind, detail);
+    }
   }
 
-  /** Finds the issue number whose artifact carries `id`. */
+  /**
+   * Finds the issue number whose artifact carries `id`.
+   *
+   * Deliberately does *not* pass `--label`, even though every epic carries one.
+   * Label filtering makes this a search query, and GitHub's search index trails
+   * the issue store: measured against the live API, an issue created by `save`
+   * stayed invisible to a label-filtered list for ~7.7s while the unfiltered
+   * list returned it immediately. Read-after-write is the normal shape of this
+   * provider's use — save an epic, then approve it — so a lagging lookup meant
+   * `get` reporting a just-created epic as nonexistent. The label remains for
+   * humans filtering in the GitHub UI; correctness must not depend on it.
+   *
+   * The cost is decoding non-epic issues, which `decode` already tolerates.
+   */
   private async findIssue(id: string): Promise<number | null> {
     const out = await this.gh([
       'issue', 'list',
       '--repo', this.repo,
-      '--label', this.epicLabel,
       '--state', 'all',
       '--limit', '200',
-      '--json', 'number,body',
+      '--json', 'number,body,title',
     ]);
-    for (const issue of JSON.parse(out) as { number: number; body: string }[]) {
+    const issues = JSON.parse(out) as { number: number; body: string; title: string }[];
+    for (const issue of issues) {
       const parsed = this.decode(issue.body);
       if (parsed?.id === id) return issue.number;
     }
-    return null;
+    // Nothing decoded to this id. Before concluding it is absent, match on the
+    // title `encode` writes, so a corrupted artifact is still *found* and `get`
+    // can report corruption. Without this the epic reads as nonexistent, which
+    // is the failure mode that sends a reader hunting for a missing epic that
+    // is sitting in the backlog with a broken body.
+    const titled = issues.find((i) => i.title.startsWith(`[${id}]`));
+    return titled?.number ?? null;
   }
 
-  /** Extracts the artifact from an issue body, or null when absent/invalid. */
+  /**
+   * Reads the artifact out of an issue body.
+   *
+   * Returns `absent` when there is no fenced block at all — an issue carrying
+   * the epic label that a human opened by hand is not ours to interpret, and
+   * scanning must skip it rather than fail.
+   *
+   * Returns `corrupt` when a block exists but does not yield a valid epic.
+   * Both failure paths land here on purpose: `parse` throws on malformed YAML
+   * while `safeParse` rejects YAML that is well-formed but not an epic, and a
+   * caller that cannot tell those from "no such epic" reports the wrong thing.
+   */
+  private read(
+    body: string | null | undefined,
+  ): { kind: 'ok'; epic: Epic } | { kind: 'absent' } | { kind: 'corrupt'; detail: string } {
+    const block = body?.match(BLOCK)?.[1];
+    if (!block) return { kind: 'absent' };
+
+    let parsed: unknown;
+    try {
+      parsed = parse(block);
+    } catch (err) {
+      return { kind: 'corrupt', detail: `invalid YAML (${(err as Error).message.split('\n')[0]})` };
+    }
+
+    const result = Epic.safeParse(parsed);
+    if (!result.success) {
+      const first = result.error.issues[0];
+      const where = first?.path.length ? first.path.join('.') : 'artifact';
+      return { kind: 'corrupt', detail: `${where}: ${first?.message ?? 'does not match the epic schema'}` };
+    }
+    return { kind: 'ok', epic: result.data };
+  }
+
+  /** Scanning helper: yields the epic, or null for anything unreadable. */
   private decode(body: string | null | undefined): Epic | null {
-    const match = body?.match(BLOCK);
-    const block = match?.[1];
-    if (!block) return null;
-    const result = Epic.safeParse(parse(block));
-    return result.success ? result.data : null;
+    const r = this.read(body);
+    return r.kind === 'ok' ? r.epic : null;
   }
 
   /** Renders an issue body: human prose first, machine block last. */
@@ -90,7 +162,11 @@ export class GitHubIssuesBacklog implements BacklogProvider {
       '--repo', this.repo,
       '--json', 'body',
     ]);
-    return this.decode((JSON.parse(out) as { body: string }).body);
+    const result = this.read((JSON.parse(out) as { body: string }).body);
+    // Corruption is raised, not returned as null: the epic is present, and
+    // reporting it as absent would hide it from whoever can repair it.
+    if (result.kind === 'corrupt') throw new EpicCorruptError(id, this.kind, result.detail);
+    return result.kind === 'ok' ? result.epic : null;
   }
 
   async list(filter?: { status?: EpicStatus }): Promise<Epic[]> {
