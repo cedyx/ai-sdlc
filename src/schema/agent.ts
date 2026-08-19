@@ -6,9 +6,18 @@ import { z } from 'zod';
  * Providers express the same intent through different mechanisms, so the IR
  * describes *what* a role may do, never *how* a provider enforces it:
  *
- *   write-path limits  -> Claude: PreToolUse hook | Codex: sandbox + instructions
- *   vcs mutation ban   -> Claude: PreToolUse hook | Codex: sandbox_mode
+ *   write-path limits  -> Claude: PreToolUse hook | Codex: instructions only
+ *   vcs mutation ban   -> Claude: PreToolUse hook | Codex: instructions only
  *   model selection    -> Claude: model alias     | Codex: model + reasoning effort
+ *
+ * Read the right column as "what the provider does with it", not as an
+ * equivalence. Codex's `sandbox_mode` draws a filesystem and network boundary
+ * and knows nothing about which commands run inside it, so neither a write-path
+ * allow-list nor a `git commit` ban lowers onto it -- both survive as prose.
+ * `lowerCapabilities` in the Codex generator is the authority on what actually
+ * became of a field: it reports each as native, advisory, broadened, or
+ * unsupported, and `generate` prints the result. A field existing here does not
+ * imply anything enforces it.
  *
  * Adding a field here means teaching every generator to lower it. Prefer
  * expressing a new restriction with the existing vocabulary where possible.
