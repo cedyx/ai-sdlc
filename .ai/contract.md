@@ -63,10 +63,16 @@ loader silently discards per-agent hooks, and the PreToolUse payload has no
 agent identity, so only restrictions shared by every role can be enforced and
 the rest are prose.
 
-Codex is not offered as a plugin at all: the format packages skills, hooks, and
-MCP/app config but not agents, so both roles would collapse into one skill —
-functionally similar, not equivalent. Revisit if the format gains agents, or
-once the gate is fully enforced by the CLI.
+Codex is not offered as a plugin at all. Codex supports plugins and custom
+subagents, but agent definitions are not currently a distributable plugin
+component, so installing one would carry the workflow without the two role
+configurations. Repo mode emits `.codex/agents/*.toml` instead and keeps the
+topology. Revisit if the format gains agents.
+
+Do not justify that choice by appealing to the approval gate. The gate is
+`ai-sdlc status` and holds regardless of how many agents are configured; what a
+Codex plugin cannot reproduce is role separation. Conflating the two is the same
+error as treating agent separation as an authorization boundary.
 
 A restriction that must hold under an adversarial or confused model therefore
 needs a second layer — branch protection, CI checks, or review — not agent

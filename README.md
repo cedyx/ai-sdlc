@@ -44,6 +44,9 @@ is build output. Edit `.ai/` and re-run the generator.
 
 ## Getting started
 
+> Just want to install and use it? See **[GUIDE.md](GUIDE.md)** — no setup, no
+> terminal. The rest of this README is for people configuring or extending it.
+
 `ai-sdlc` is a build tool you run *in* a repo; it is not something the agents
 call. You run `generate` when the source changes and commit the output.
 
@@ -119,6 +122,21 @@ Same checkout, different files.
   `# Capability restrictions` section. See *Capability asymmetry* below: on
   Codex these are instructions, not enforcement.
 
+
+Codex supports plugins and custom subagents, but custom agent definitions are
+not currently a distributable component of a Codex plugin. `ai-sdlc` therefore
+does not publish one: it would install the shared workflow without installing
+the separate business-analyst and developer configurations. The plugin surface
+could approximate the workflow with skills, but the installed result would not
+reproduce the two-role topology that repo mode does.
+
+`init` + `generate` emits native `.codex/agents/*.toml` instead, which keeps the
+same role structure as the Claude setup.
+
+The approval boundary does not depend on that topology. `ai-sdlc status`
+enforces artifact state independently of how many agents are configured — see
+*Where the gate actually holds*. Role separation is what the plugin cannot
+carry; the gate is not.
 ## The workflow
 
 The two roles hand off through the epic artifact, not through conversation.
@@ -221,7 +239,7 @@ The same capability block lowers to three different strengths.
 | Claude, repo | enforced per role | enforced per role | separate agents |
 | Claude, plugin | advisory | enforced, but plugin-wide | separate agents |
 | Codex, repo | advisory (`sandbox_mode` is coarse) | `sandbox_mode` | separate agents |
-| Codex, plugin | — | — | not offered: format ships no agents |
+| Codex, plugin | — | — | not offered: agents are not a distributable component |
 
 In repo mode each agent carries its own `PreToolUse` hooks and the tool call
 fails. Plugin mode cannot do this, for two reasons verified against a live
