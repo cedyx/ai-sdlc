@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { readFile, writeFile, mkdir, readdir, symlink, lstat } from 'node:fs/promises';
-import { join, relative, dirname } from 'node:path';
+import { readFile, writeFile, mkdir, readdir, symlink, lstat, cp, access } from 'node:fs/promises';
+import { join, relative, dirname, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { AgentSpec } from './schema/agent.js';
 import { Config } from './schema/config.js';
@@ -115,11 +116,99 @@ async function approve(root: string, id: string, by: string): Promise<number> {
   return 0;
 }
 
+/**
+ * Directory of the installed package (dist/ -> package root). `init` seeds a
+ * consuming repo from the starter `.ai/` and hook scripts shipped in `files`.
+ */
+const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Seeds `.ai/` and `scripts/hooks/` into a repo that does not have them.
+ *
+ * Refuses to overwrite an existing `.ai/`: the source of truth is hand-edited,
+ * so clobbering it would silently discard a team's agent definitions. Hook
+ * scripts are copied rather than symlinked because generated Claude hooks
+ * resolve them relative to the consuming repo, which must survive a fresh
+ * clone with no node_modules.
+ */
+/**
+ * Placeholder contract for a freshly-initialised repo. Deliberately terse and
+ * obviously incomplete — a plausible-looking default would get shipped unread,
+ * and every line here is compiled into CLAUDE.md and AGENTS.md.
+ */
+const STARTER_CONTRACT = `# Project contract
+
+Shared instructions for every AI agent working in this repository, regardless
+of provider. This file is the source; \`CLAUDE.md\` and \`AGENTS.md\` are
+generated from it by \`ai-sdlc generate\`. Edit here, never there.
+
+## What this project is
+
+TODO: one paragraph. What the codebase does and who uses it.
+
+## Architecture
+
+TODO: the handful of facts an agent would otherwise get wrong — module
+boundaries, where state lives, what must not be imported from where.
+
+## Conventions
+
+TODO: language, test framework and how to run it, formatting, commit style.
+
+## Boundaries
+
+TODO: what agents must not touch without a human — CI, secrets, migrations,
+infrastructure.
+`;
+
+async function init(root: string): Promise<number> {
+  const aiDir = join(root, AI_DIR);
+  if (await exists(aiDir)) {
+    console.error(`${AI_DIR}/ already exists — refusing to overwrite.`);
+    console.error('Edit it directly, or remove it first to re-seed from the starter.');
+    return 1;
+  }
+
+  // The example epic and this project's own contract are artifacts of the
+  // ai-sdlc repo, not a starting point for a consuming one: seeding them would
+  // plant a fake epic and describe the wrong codebase.
+  await cp(join(PKG_ROOT, AI_DIR), aiDir, {
+    recursive: true,
+    filter: (src) => {
+      const rel = relative(join(PKG_ROOT, AI_DIR), src);
+      return rel !== 'epics' && !rel.startsWith(`epics${sep}`) && rel !== 'contract.md';
+    },
+  });
+  await mkdir(join(aiDir, 'epics'), { recursive: true });
+  await writeFile(join(aiDir, 'contract.md'), STARTER_CONTRACT, 'utf8');
+  console.log(`  ${AI_DIR}/`);
+
+  const hooks = join(root, 'scripts', 'hooks');
+  if (!(await exists(hooks))) {
+    await cp(join(PKG_ROOT, 'scripts', 'hooks'), hooks, { recursive: true });
+    console.log('  scripts/hooks/');
+  }
+
+  console.log('\nNext: edit .ai/agents/*.yaml and .ai/contract.md, then run `ai-sdlc generate`.');
+  return 0;
+}
+
 async function main(): Promise<number> {
   const [command, ...args] = process.argv.slice(2);
   const root = process.env.AI_SDLC_ROOT ?? process.cwd();
 
   switch (command) {
+    case 'init':
+      return init(root);
     case 'generate':
       await generate(root);
       return 0;
@@ -134,7 +223,7 @@ async function main(): Promise<number> {
       return approve(root, args[0], by);
     }
     default:
-      console.error('usage: ai-sdlc <generate|status|approve>');
+      console.error('usage: ai-sdlc <init|generate|status|approve>');
       return 64;
   }
 }
