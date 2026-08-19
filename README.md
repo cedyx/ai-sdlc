@@ -184,15 +184,44 @@ a model-driven delegation pauses where you expect, so `epic-flow` checks the
 artifact instead of trusting sequencing. `ai-sdlc status` exits non-zero when the
 gate is closed, which makes it usable from CI as well as from the orchestrator.
 
+## Where the gate actually holds
+
+Separating the roles into two agents is workflow structure, not an authorization
+boundary. Both providers spawn subagents under model control, and the main agent
+generally retains filesystem and tool access regardless, so "two agents" buys
+sequencing and a smaller context per role — not a guarantee that implementation
+cannot start early. Read `.claude/agents/*` or `.codex/agents/*.toml` as a
+description of intended division of labour.
+
+What can hold is a deterministic check the model cannot talk its way past:
+
+```
+ai-sdlc status EPIC-123    # exit 0 only if APPROVED with a recorded approver
+```
+
+`Epic` refuses to parse `status: APPROVED` unless `approved_by` and
+`approved_at` are both set, so a hand-edited artifact fails validation rather
+than passing the gate. Wire that exit code into whatever actually gates the
+work — a CI job, a pre-push hook, branch protection on the implementation
+branch. Prompt-level instructions are the fallback, not the mechanism.
+
+This is why capability asymmetry between providers matters less than it looks:
+once the gate is a nonzero exit, it is identical everywhere, and each provider's
+agent configuration is left to express division of labour rather than security.
+Moving the remaining enforcement into the CLI is the direction of travel — and
+the point at which a Codex skills-only plugin would become safe to ship, since
+the property would no longer rest on agent separation.
+
 ## Capability asymmetry
 
 The same capability block lowers to three different strengths.
 
-| Mode | Write paths | VCS mutation |
-|---|---|---|
-| Claude, repo | enforced per role | enforced per role |
-| Claude, plugin | advisory | enforced, but plugin-wide |
-| Codex | advisory (`sandbox_mode` is coarse) | `sandbox_mode` |
+| Mode | Write paths | VCS mutation | Roles |
+|---|---|---|---|
+| Claude, repo | enforced per role | enforced per role | separate agents |
+| Claude, plugin | advisory | enforced, but plugin-wide | separate agents |
+| Codex, repo | advisory (`sandbox_mode` is coarse) | `sandbox_mode` | separate agents |
+| Codex, plugin | — | — | not offered: format ships no agents |
 
 In repo mode each agent carries its own `PreToolUse` hooks and the tool call
 fails. Plugin mode cannot do this, for two reasons verified against a live

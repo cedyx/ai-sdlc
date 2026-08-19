@@ -46,6 +46,16 @@ The epic artifact is the state machine. Implementation is gated on
 Any change that lets a role advance past the gate without reading the artifact
 is a bug, not a convenience.
 
+Distinguish workflow separation from an enforcement boundary. Splitting the
+roles into two agents sequences the work and keeps each context small; it does
+not make the gate hard, because subagent orchestration is model-driven and the
+main agent keeps its own tool access. Treat agent definitions as division of
+labour, and put enforcement where a model cannot argue with it: `ai-sdlc status`
+exits nonzero unless the artifact is APPROVED with a recorded approver, and
+`Epic` refuses to parse APPROVED without one. New enforcement belongs in the
+CLI, where it is identical across providers, rather than in per-provider agent
+configuration.
+
 ## Capability asymmetry between providers
 
 Claude enforces write-path and VCS limits with PreToolUse hooks, which are
@@ -54,6 +64,11 @@ instructions, which are advisory. Claude *plugin* mode sits between them: the
 loader silently discards per-agent hooks, and the PreToolUse payload has no
 agent identity, so only restrictions shared by every role can be enforced and
 the rest are prose.
+
+Codex is not offered as a plugin at all: the format packages skills, hooks, and
+MCP/app config but not agents, so both roles would collapse into one skill —
+functionally similar, not equivalent. Revisit if the format gains agents, or
+once the gate is fully enforced by the CLI.
 
 A restriction that must hold under an adversarial or confused model therefore
 needs a second layer — branch protection, CI checks, or review — not agent
