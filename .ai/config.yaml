@@ -1,0 +1,8 @@
+# Which provider adapters `ai-sdlc generate` emits, and where epics live.
+providers:
+  - claude
+  - codex
+
+backlog:
+  kind: filesystem
+  dir: .ai/epics

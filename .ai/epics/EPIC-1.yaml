@@ -1,0 +1,19 @@
+id: EPIC-1
+title: Example epic
+status: DRAFT
+stories:
+  - id: S1
+    text: As a maintainer, I want a worked example, so that the gate is demonstrable.
+    acceptance_criteria:
+      - id: AC1
+        text: Given a DRAFT epic, when status is checked, then implementation is
+          blocked.
+out_of_scope: []
+non_functional: []
+compliance_flags: []
+open_questions:
+  - text: Should the example ship in the published package?
+    assumption: Yes — it documents the artifact shape better than prose.
+approval:
+  approved_by: null
+  approved_at: null

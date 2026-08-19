@@ -1,0 +1,84 @@
+import { z } from 'zod';
+
+/**
+ * Neutral agent IR.
+ *
+ * Providers express the same intent through different mechanisms, so the IR
+ * describes *what* a role may do, never *how* a provider enforces it:
+ *
+ *   write-path limits  -> Claude: PreToolUse hook | Codex: sandbox + instructions
+ *   vcs mutation ban   -> Claude: PreToolUse hook | Codex: sandbox_mode
+ *   model selection    -> Claude: model alias     | Codex: model + reasoning effort
+ *
+ * Adding a field here means teaching every generator to lower it. Prefer
+ * expressing a new restriction with the existing vocabulary where possible.
+ */
+
+/** Coarse model tier. Generators map this onto each provider's own naming. */
+export const ModelClass = z.enum(['fast', 'balanced', 'reasoning']);
+export type ModelClass = z.infer<typeof ModelClass>;
+
+export const Effort = z.enum(['low', 'medium', 'high']);
+export type Effort = z.infer<typeof Effort>;
+
+export const ModelPreference = z
+  .object({
+    class: ModelClass.default('balanced'),
+    effort: Effort.optional(),
+  })
+  .strict();
+export type ModelPreference = z.infer<typeof ModelPreference>;
+
+/** Filesystem reach. `read` still allows every read-only tool. */
+export const FilesystemAccess = z.enum(['none', 'read', 'write']);
+
+/**
+ * Glob-scoped write permissions. `allow` is a whitelist (everything else is
+ * denied); `deny` subtracts from an otherwise-open write permission. They are
+ * mutually exclusive — mixing them makes precedence ambiguous across providers.
+ */
+export const WritePaths = z
+  .object({
+    allow: z.array(z.string()).optional(),
+    deny: z.array(z.string()).optional(),
+  })
+  .strict()
+  .refine((v) => !(v.allow && v.deny), {
+    message: 'write_paths: use either allow or deny, not both',
+  });
+export type WritePaths = z.infer<typeof WritePaths>;
+
+export const Capabilities = z
+  .object({
+    filesystem: FilesystemAccess.default('read'),
+    /** Only meaningful when filesystem is `write`. */
+    write_paths: WritePaths.optional(),
+    shell: z.boolean().default(false),
+    network: z.boolean().default(false),
+    /**
+     * Whether the role may run history-mutating VCS commands (commit, push,
+     * tag, merge). Read-only inspection stays available regardless.
+     */
+    vcs_mutate: z.boolean().default(false),
+  })
+  .strict()
+  .refine((v) => v.filesystem === 'write' || !v.write_paths, {
+    message: 'write_paths requires filesystem: write',
+  });
+export type Capabilities = z.infer<typeof Capabilities>;
+
+export const AgentSpec = z
+  .object({
+    /** Stable role id. Referenced by skills and by generated provider files. */
+    name: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]*$/, 'name must be kebab-case'),
+    /** Drives automatic selection on both providers — front-load trigger words. */
+    description: z.string().min(1),
+    /** The role prompt. Becomes the Claude body / Codex developer_instructions. */
+    instructions: z.string().min(1),
+    capabilities: Capabilities.default({}),
+    model: ModelPreference.default({}),
+  })
+  .strict();
+export type AgentSpec = z.infer<typeof AgentSpec>;

@@ -1,0 +1,33 @@
+{
+  "name": "ai-sdlc",
+  "version": "0.1.0",
+  "description": "Provider-neutral agent SDLC pipeline: one source of truth compiled to Claude Code and Codex",
+  "type": "module",
+  "bin": {
+    "ai-sdlc": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    ".ai",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate": "npm run build && node dist/cli.js generate",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}
