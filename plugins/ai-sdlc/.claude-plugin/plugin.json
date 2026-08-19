@@ -1,0 +1,8 @@
+{
+  "name": "ai-sdlc",
+  "version": "0.1.0",
+  "description": "Provider-neutral agent SDLC pipeline: one source of truth compiled to Claude Code and Codex",
+  "author": {
+    "name": "ai-sdlc"
+  }
+}

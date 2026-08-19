@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { readFile, writeFile, mkdir, readdir, symlink, lstat, cp, access } from 'node:fs/promises';
+import {
+  readFile, writeFile, mkdir, readdir, symlink, lstat, cp, access, chmod, rm,
+} from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { join, relative, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -9,6 +12,12 @@ import { Epic } from './schema/epic.js';
 import { generateClaudeAgent } from './generators/claude.js';
 import { generateCodexAgent } from './generators/codex.js';
 import { generateContracts } from './generators/contracts.js';
+import {
+  generatePluginAgent,
+  generatePluginHooks,
+  generatePluginManifest,
+  generateMarketplaceManifest,
+} from './generators/plugin.js';
 import { FilesystemBacklog } from './backlog/filesystem.js';
 import { GitHubIssuesBacklog } from './backlog/github.js';
 import type { BacklogProvider } from './backlog/provider.js';
@@ -202,6 +211,73 @@ async function init(root: string): Promise<number> {
   return 0;
 }
 
+/**
+ * Emits a Claude Code plugin tree, so a consuming repo can install the pipeline
+ * instead of running `init` + `generate` and committing provider files.
+ *
+ * Defaults to *this* repo's root, because that is what makes the install one
+ * step for a consumer: `claude plugin marketplace add <owner>/<repo>` clones
+ * the repo and looks for `.claude-plugin/marketplace.json` at its root. Build
+ * to a throwaway directory and there is nothing to point an install at.
+ *
+ * Not a packaging of the `generate` output: plugin-shipped agents may not carry
+ * `hooks` or `permissionMode`, and the loader drops them without a word. See
+ * `src/generators/plugin.ts` for what that costs and what replaces it.
+ */
+async function buildPlugin(root: string, outDir: string): Promise<number> {
+  const agents = await loadAgents(root);
+  const pkg = JSON.parse(
+    await readFile(join(PKG_ROOT, 'package.json'), 'utf8'),
+  ) as { name: string; version: string; description: string };
+  const meta = {
+    name: pkg.name,
+    version: pkg.version,
+    description: pkg.description,
+    author: 'ai-sdlc',
+  };
+
+  const out = resolve(root, outDir);
+  const pluginRoot = join(out, 'plugins', meta.name);
+
+  const emit = async (rel: string, content: string): Promise<void> => {
+    const full = join(out, rel);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, content, 'utf8');
+    console.log(`  ${join(outDir, rel)}`);
+  };
+
+  await emit(join('.claude-plugin', 'marketplace.json'), generateMarketplaceManifest(meta));
+  await emit(join('plugins', meta.name, '.claude-plugin', 'plugin.json'),
+    generatePluginManifest(meta));
+
+  for (const spec of agents) {
+    await emit(join('plugins', meta.name, 'agents', `${spec.name}.md`),
+      generatePluginAgent(spec));
+  }
+
+  await emit(join('plugins', meta.name, 'hooks', 'hooks.json'), generatePluginHooks(agents));
+
+  // Skills and guard scripts are copied, not symlinked: a plugin is fetched as
+  // a standalone tree and a link out of it would dangle on the installing machine.
+  await rm(join(pluginRoot, 'skills'), { recursive: true, force: true });
+  await cp(join(root, AI_DIR, 'skills'), join(pluginRoot, 'skills'), { recursive: true });
+  console.log(`  ${outDir}/plugins/${meta.name}/skills/`);
+  await rm(join(pluginRoot, 'scripts'), { recursive: true, force: true });
+  await cp(join(PKG_ROOT, 'scripts', 'hooks'), join(pluginRoot, 'scripts', 'hooks'), {
+    recursive: true,
+    // cp does not preserve the executable bit by default on every platform.
+    mode: constants.COPYFILE_FICLONE,
+  });
+  for (const name of await readdir(join(pluginRoot, 'scripts', 'hooks'))) {
+    await chmod(join(pluginRoot, 'scripts', 'hooks', name), 0o755);
+  }
+  console.log(`  ${outDir}/plugins/${meta.name}/scripts/hooks/`);
+
+  console.log(`\nValidate with: claude plugin validate ${outDir}`);
+  console.log('Commit the tree so consumers can install it directly from the repo.');
+  return 0;
+}
+
 async function main(): Promise<number> {
   const [command, ...args] = process.argv.slice(2);
   const root = process.env.AI_SDLC_ROOT ?? process.cwd();
@@ -212,6 +288,17 @@ async function main(): Promise<number> {
     case 'generate':
       await generate(root);
       return 0;
+    case 'plugin':
+      if (args[0] !== 'build') {
+        console.error('usage: ai-sdlc plugin build [--out <dir>]');
+        return 64;
+      }
+      {
+        // indexOf returns -1 when absent, which would index args[0] ('build').
+        const i = args.indexOf('--out');
+        // Repo root by default: see buildPlugin.
+        return buildPlugin(root, (i >= 0 ? args[i + 1] : undefined) ?? '.');
+      }
     case 'status':
       if (!args[0]) throw new Error('usage: ai-sdlc status <epic-id>');
       return status(root, args[0]);
@@ -223,7 +310,7 @@ async function main(): Promise<number> {
       return approve(root, args[0], by);
     }
     default:
-      console.error('usage: ai-sdlc <init|generate|status|approve>');
+      console.error('usage: ai-sdlc <init|generate|plugin|status|approve>');
       return 64;
   }
 }

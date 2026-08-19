@@ -20,10 +20,17 @@ workflow, and the same repo conventions work in either tool.
   existing vocabulary.
 - `src/generators/` lowers the IR to each provider. Generators are pure
   functions from spec to string; keep filesystem work in the CLI.
+- `src/generators/plugin.ts` is a third lowering, not a packaging step. Claude
+  plugins reject the frontmatter hooks that carry enforcement in repo mode, so
+  the two outputs are deliberately different files.
 - `src/backlog/` implements `BacklogProvider`. Provider-specific vocabulary
   (issue numbers, labels, file paths) must not escape this directory.
+- `.claude-plugin/` and `plugins/ai-sdlc/` at the repo root are generated too,
+  but committed on purpose: `claude plugin marketplace add <owner>/<repo>` reads
+  them from the default branch, which is what makes installing one step. Change
+  `.ai/`, then `ai-sdlc plugin build`; do not edit the tree.
 - Generated files are build output. Never hand-edit `.claude/agents/*`,
-  `.codex/agents/*`, `CLAUDE.md`, or `AGENTS.md`.
+  `.codex/agents/*`, `CLAUDE.md`, `AGENTS.md`, or the root plugin tree.
 
 ## Conventions
 
@@ -43,6 +50,12 @@ is a bug, not a convenience.
 
 Claude enforces write-path and VCS limits with PreToolUse hooks, which are
 mandatory. Codex expresses the coarse grant via `sandbox_mode` and the rest as
-instructions, which are advisory. A restriction that must hold under an
-adversarial or confused model therefore needs a second layer — branch
-protection, CI checks, or review — not agent configuration alone.
+instructions, which are advisory. Claude *plugin* mode sits between them: the
+loader silently discards per-agent hooks, and the PreToolUse payload has no
+agent identity, so only restrictions shared by every role can be enforced and
+the rest are prose.
+
+A restriction that must hold under an adversarial or confused model therefore
+needs a second layer — branch protection, CI checks, or review — not agent
+configuration alone. When adding a restriction, state which of the three modes
+actually enforce it; an unqualified claim will be wrong in at least one.

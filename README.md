@@ -16,11 +16,14 @@ generates each provider's native files.
 | Capability enforcement | provider-specific: Claude hooks vs Codex sandbox |
 | Repo contract | one source, generated to `CLAUDE.md` and `AGENTS.md` |
 | Backlog state | provider-neutral artifact behind `BacklogProvider` |
-| Plugin packaging | provider-specific, out of scope here |
+| Plugin packaging | Claude: committed tree, installable from the repo |
 
 ## Layout
 
 ```
+.claude-plugin/             marketplace manifest (generated, committed)
+plugins/ai-sdlc/           the plugin itself (generated, committed)
+
 .ai/                        source of truth
 ├── contract.md             repo conventions, generated to CLAUDE.md + AGENTS.md
 ├── config.yaml             providers to emit, backlog backend
@@ -69,6 +72,39 @@ Everything is picked up from the checkout — there is nothing to configure.
 - The `PreToolUse` hooks in each agent file are enforced by Claude itself: a
   write outside the allowed globs, or a `git commit` from the developer role,
   fails the tool call.
+
+## Install as a plugin
+
+This repo *is* a plugin marketplace. Nothing to clone, build, or npm-install:
+
+```bash
+claude plugin marketplace add cedyx/ai-sdlc
+claude plugin install ai-sdlc
+```
+
+You get both agents, the `epic-flow` skill, and the guard scripts. The consuming
+repo needs no `.ai/`, no `.claude/`, and no `node_modules`.
+
+Two things the plugin cannot bring, both by nature rather than omission:
+
+- **The repo contract.** `CLAUDE.md` describes *your* codebase, so it can only
+  come from your own `.ai/contract.md` via `generate`.
+- **Per-role capability enforcement.** See *Capability asymmetry* — plugin mode
+  enforces the VCS guard but demotes write-path limits to prose.
+
+Use `init` + `generate` when you want the definitions versioned in your repo and
+editable per project; use the plugin when you want the pipeline as-is.
+
+### Publishing your own
+
+The tree at `.claude-plugin/` and `plugins/` is generated and committed, which is
+what makes the install one step — `marketplace add` reads it straight from the
+default branch. If you fork and change `.ai/`, regenerate and commit:
+
+```bash
+ai-sdlc plugin build     # writes to the repo root
+claude plugin validate . --strict
+```
 
 ## Using it from Codex
 
@@ -125,6 +161,7 @@ agent talks itself past a prompt.
 ```bash
 ai-sdlc init                     # seed .ai/ + scripts/hooks/ (refuses to overwrite)
 ai-sdlc generate                 # compile .ai/ -> provider files
+ai-sdlc plugin build             # compile .ai/ -> plugin tree at repo root
 ai-sdlc status <epic-id>         # gate check; exit 0/1/2
 ai-sdlc approve <id> --by <name> # record approver + timestamp
 ```
@@ -149,14 +186,36 @@ gate is closed, which makes it usable from CI as well as from the orchestrator.
 
 ## Capability asymmetry
 
-Claude enforces write-path and VCS restrictions through `PreToolUse` hooks:
-mandatory, and the tool call fails. Codex expresses the coarse grant through
-`sandbox_mode` and the rest as instructions appended to the agent prompt:
-advisory, and a confused model can talk itself past them.
+The same capability block lowers to three different strengths.
 
-The generator emits both, but they are not equivalent. A restriction that must
-hold under an adversarial or confused model needs a second layer — branch
-protection, CI checks, or human review — not agent configuration alone.
+| Mode | Write paths | VCS mutation |
+|---|---|---|
+| Claude, repo | enforced per role | enforced per role |
+| Claude, plugin | advisory | enforced, but plugin-wide |
+| Codex | advisory (`sandbox_mode` is coarse) | `sandbox_mode` |
+
+In repo mode each agent carries its own `PreToolUse` hooks and the tool call
+fails. Plugin mode cannot do this, for two reasons verified against a live
+install rather than read from docs:
+
+- Plugin-shipped agents may not declare `hooks` or `permissionMode`. The loader
+  drops them **silently** — no runtime error, and `claude plugin validate
+  --strict` passes. Shipping the repo-mode agents as-is would produce agents
+  that look enforced and are not.
+- The `PreToolUse` payload carries no agent identity, so a plugin-level hook
+  cannot tell which role called it.
+
+So `plugin build` moves what it can into a plugin-wide `hooks/hooks.json` — the
+VCS guard, which every role in the default pipeline shares — and demotes the
+rest to a `## Capability restrictions (advisory in plugin mode)` section in the
+agent's own prompt, which says plainly that it is not backed by a hook. If you
+add a role that *may* commit, the VCS guard is dropped entirely rather than
+silently breaking that role, and the generated `hooks.json` `description` says
+so.
+
+None of the three modes is a security boundary. A restriction that must hold
+under an adversarial or confused model needs branch protection, CI checks, or
+human review — not agent configuration alone.
 
 ## Backlog backends
 
@@ -173,4 +232,5 @@ Switch backends in `.ai/config.yaml`. `epic-flow` never names either one.
 
 Early. The generators, gate, guard scripts, and both backends work and are
 tested; the pipeline has not yet been run end to end on a real feature in a
-consuming repo.
+consuming repo. Plugin mode has been installed and its guard confirmed to fire,
+but only against the default two-role pipeline.

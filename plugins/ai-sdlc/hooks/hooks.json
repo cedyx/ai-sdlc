@@ -1,0 +1,16 @@
+{
+  "description": "ai-sdlc capability guards. Plugin-level because the loader discards per-agent hooks; scoped to restrictions common to every role because the PreToolUse payload has no agent identity.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/block-vcs-mutations.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
