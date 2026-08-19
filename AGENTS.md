@@ -110,6 +110,42 @@ finding. Note that moving it there is invisible to `tsc` — `capability` is sti
 a string, merely the wrong one for display — so a change here is verified by
 diffing `generate` output, not by a clean typecheck.
 
+## Requirements are a set of fidelities, never a threshold
+
+`requirements.codex` says which lowering fidelities are acceptable per
+capability. Membership is the whole test: there is no ordering, and generation
+fails when a finding's fidelity is not in its set.
+
+Ordering was rejected because `advisory` and `broadened` are different failure
+modes, not two strengths of one. `write_paths.allow` lowers to `broadened` — the
+runtime enforces a boundary, but a wider one than asked. `write_paths.deny`
+lowers to `advisory` — there is no boundary, only prose. Which is worse depends
+on the threat model: a broadened sandbox still contains a confused model, while
+prose contains nothing; an adversarial model may find the extra grant more
+useful than the missing prohibition. Both appear in this repo's own agents on
+the same axis, so a ladder would have had to rank them. Do not add one, and do
+not let `native` satisfy a set that does not list it.
+
+`default` is required per target so the policy is total: every (capability,
+target) pair has an answer, and a new `CapabilityId` inherits the default rather
+than becoming silently unconstrained. Permissiveness stays legal but must be
+written out — there is no `any`, because one grep-able line is the point.
+
+`codex` is the only nameable target because it is the only one that emits
+findings; `claude-repo` and `claude-plugin` are schema errors. A target becomes
+nameable when it reports fidelity, not when the architecture has a slot for it.
+Naming one that reports nothing would validate nothing and pass, which is the
+same green-check-proving-the-wrong-thing failure as inferring the epic from
+changed files.
+
+`--allow-lossy=<target>` skips enforcement for that target only. It never alters
+the fidelity computation, and the report still prints — the flag waives the
+policy, not the finding.
+
+The checker lives in `src/generators/`, not `src/enforcement/`: it consumes a
+Codex type and judges one provider's lowering, whereas enforcement is
+provider-neutral and may not import from generators.
+
 ## Capability asymmetry between providers
 
 Claude enforces write-path and VCS limits with PreToolUse hooks, which are

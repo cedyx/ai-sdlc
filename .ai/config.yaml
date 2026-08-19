@@ -6,3 +6,15 @@ providers:
 backlog:
   kind: filesystem
   dir: .ai/epics
+
+# Accepted lowering fidelities per capability. A set, not a threshold: advisory
+# and broadened are different failure modes, so neither substitutes for the other.
+requirements:
+  codex:
+    default: [native]
+    # workspace-write cannot narrow to a path list, nor exclude paths, nor
+    # remove shell or git. Each is prose on Codex; back them with CI or review.
+    write_paths.allow: [native, broadened]
+    write_paths.deny: [native, advisory]
+    shell: [native, advisory]
+    vcs_mutate: [native, advisory]

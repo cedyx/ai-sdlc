@@ -11,6 +11,7 @@ import { Config } from './schema/config.js';
 import { Epic } from './schema/epic.js';
 import { generateClaudeAgent } from './generators/claude.js';
 import { generateCodexAgent, lowerCapabilities, type CapabilityFinding } from './generators/codex.js';
+import { checkRequirements, formatViolation } from './generators/requirements.js';
 import { generateContracts } from './generators/contracts.js';
 import { generateCiWorkflow } from './enforcement/ci.js';
 import {
@@ -62,7 +63,7 @@ async function linkSkills(root: string, providerDir: string): Promise<void> {
   console.log(`  ${providerDir}/skills -> ${AI_DIR}/skills`);
 }
 
-async function generate(root: string): Promise<void> {
+async function generate(root: string, allowLossy: Set<string>): Promise<number> {
   const config = await loadConfig(root);
   const agents = await loadAgents(root);
   console.log(`Generating for: ${config.providers.join(', ')}`);
@@ -96,6 +97,19 @@ async function generate(root: string): Promise<void> {
   await write(root, ci.path, ci.content);
 
   if (config.providers.includes('codex')) reportCodexFidelity(agents);
+
+  // Requirements are checked after the report, and the report is printed either
+  // way: --allow-lossy skips enforcement only, never the fidelity computation.
+  const reqs = config.requirements?.codex;
+  if (reqs && config.providers.includes('codex') && !allowLossy.has('codex')) {
+    const rows = agents.map((spec) => ({ name: spec.name, findings: lowerCapabilities(spec).findings }));
+    const violations = checkRequirements(rows, reqs);
+    if (violations.length) {
+      for (const v of violations) console.error(`\n${formatViolation(v)}`);
+      return 1;
+    }
+  }
+  return 0;
 }
 
 /**
@@ -351,9 +365,18 @@ async function main(): Promise<number> {
   switch (command) {
     case 'init':
       return init(root);
-    case 'generate':
-      await generate(root);
-      return 0;
+    case 'generate': {
+      const lossy = new Set(
+        args.filter((a) => a.startsWith('--allow-lossy=')).map((a) => a.slice('--allow-lossy='.length)),
+      );
+      for (const t of lossy) {
+        if (t !== 'codex') {
+          console.error(`--allow-lossy: unknown target '${t}' (only 'codex' reports fidelity)`);
+          return 64;
+        }
+      }
+      return generate(root, lossy);
+    }
     case 'plugin':
       if (args[0] !== 'build') {
         console.error('usage: ai-sdlc plugin build [--out <dir>]');

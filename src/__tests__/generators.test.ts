@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AgentSpec } from '../schema/agent.js';
 import { generateClaudeAgent } from '../generators/claude.js';
-import { generateCodexAgent, lowerCapabilities } from '../generators/codex.js';
+import { generateCodexAgent, lowerCapabilities, type CapabilityId } from '../generators/codex.js';
 
 const base = {
   name: 'analyst',
@@ -172,7 +172,7 @@ describe('codex generator', () => {
 // assert the classification, not the wording: `advisory` and `broadened` are
 // the signal that a restriction needs branch protection behind it.
 describe('codex capability fidelity', () => {
-  const find = (spec: unknown, capability: string) =>
+  const find = (spec: unknown, capability: CapabilityId) =>
     lowerCapabilities(AgentSpec.parse(spec)).findings.find((f) => f.capability === capability);
 
   it('reports a write-path allow-list as broadened, not enforced', () => {
