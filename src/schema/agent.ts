@@ -21,10 +21,22 @@ export type ModelClass = z.infer<typeof ModelClass>;
 export const Effort = z.enum(['low', 'medium', 'high']);
 export type Effort = z.infer<typeof Effort>;
 
+/**
+ * `class` and `effort` are preferences: each generator maps them onto whatever
+ * its provider currently offers. `pin` overrides that with an exact model id
+ * per provider.
+ *
+ * The default is deliberately to emit no model id at all. A compiled-in name
+ * freezes consumers onto whatever was current when this was written — and model
+ * catalogues deprecate faster than this tool releases. Inheriting the user's
+ * configured model is both more correct and less maintenance; pin only when a
+ * role genuinely depends on one model's behaviour.
+ */
 export const ModelPreference = z
   .object({
     class: ModelClass.default('balanced'),
     effort: Effort.optional(),
+    pin: z.record(z.string(), z.string()).optional(),
   })
   .strict();
 export type ModelPreference = z.infer<typeof ModelPreference>;

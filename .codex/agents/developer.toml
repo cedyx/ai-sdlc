@@ -1,6 +1,5 @@
 name = "developer"
 description = "Implements an entire APPROVED epic: first an implementation plan with a conflict check against other epics, then code point by point, then tests covering every acceptance criterion, added to the regression suite. Call only after a human has approved the specification. Does not write requirements and does not commit or release — the orchestrator does that."
-model = "gpt-5-codex"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 
@@ -80,3 +79,6 @@ Include all of:
 - You must never create or modify these paths: .ai/epics/*.yaml, .ai/contract.md, CHANGELOG.md. They belong to other roles. Report needed changes instead of making them.
 - You must not run history-mutating VCS commands (commit, push, tag, merge, rebase). Read-only inspection such as status, log, and diff is allowed.
 """
+
+[sandbox_workspace_write]
+network_access = false

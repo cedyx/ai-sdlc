@@ -70,9 +70,23 @@ revise. This is the cheap moment to change your mind.
 
 ## The one rule
 
-**It will not write code until you approve.** Saying "looks good" in chat is not
-approval — approval is recorded in the file, with your name and the time. This
-is deliberate: it means nobody can be vague about whether you signed off.
+**It asks before it builds, and "looks good" in chat is not the answer.**
+Approval gets recorded in the file, with your name and the time. That is
+deliberate: it means nobody can be vague later about whether you signed off.
+
+Two things are worth keeping apart, because they fail differently:
+
+- **Waiting for you is a habit of the workflow.** It stops there because it is
+  told to. A confused or badly-prompted assistant can skip ahead and start
+  writing code without asking you first.
+- **Recorded approval is checked by the tool.** That part is not a habit. The
+  epic cannot be marked approved without a named approver, so work done without
+  asking you stays visibly unapproved rather than passing as signed off.
+
+So if you find code written before you were asked, the right reaction is not
+"the approval was bypassed" — it wasn't, because nothing recorded your name.
+It's that the assistant got ahead of itself, and the work still needs your
+review before it goes anywhere. Review is what catches that, not this tool.
 
 If it seems stuck waiting, it's probably waiting for you.
 

@@ -10,7 +10,7 @@ import { AgentSpec } from './schema/agent.js';
 import { Config } from './schema/config.js';
 import { Epic } from './schema/epic.js';
 import { generateClaudeAgent } from './generators/claude.js';
-import { generateCodexAgent } from './generators/codex.js';
+import { generateCodexAgent, lowerCapabilities, type CapabilityFinding } from './generators/codex.js';
 import { generateContracts } from './generators/contracts.js';
 import {
   generatePluginAgent,
@@ -92,6 +92,36 @@ async function generate(root: string): Promise<void> {
 
   if (config.providers.includes('claude')) await linkSkills(root, '.claude');
   if (config.providers.includes('codex')) await linkSkills(root, '.agents');
+
+  if (config.providers.includes('codex')) reportCodexFidelity(agents);
+}
+
+/**
+ * Prints what survived lowering onto Codex and what did not.
+ *
+ * The asymmetry between providers was documented in prose, which put it where a
+ * reader had to already suspect a problem to go looking. Printing it at build
+ * time makes the degradation impossible to adopt unknowingly: a role whose
+ * write scope is advisory is a role that needs branch protection behind it.
+ */
+function reportCodexFidelity(agents: AgentSpec[]): void {
+  const rows = agents.map((spec) => ({ name: spec.name, findings: lowerCapabilities(spec).findings }));
+  const weak = (f: CapabilityFinding) => f.fidelity !== 'native';
+  if (!rows.some((r) => r.findings.some(weak))) return;
+
+  const mark = { native: '\u2713', advisory: '~', broadened: '!' } as const;
+  console.log('\nCodex capability report');
+  for (const { name, findings } of rows) {
+    console.log(`\n  ${name}`);
+    for (const f of findings) {
+      console.log(`    ${mark[f.fidelity]} ${f.capability.padEnd(24)} ${f.detail}`);
+    }
+  }
+  console.log(
+    '\n  ~ advisory: instructions only, a model may ignore it.' +
+      '\n  ! broadened: the runtime grant is wider than the IR asked for.' +
+      '\n  Back both with branch protection or CI; agent config alone will not hold.',
+  );
 }
 
 /** Prints the gate decision for an epic. Exit 0 = implementable. */
@@ -112,7 +142,19 @@ async function status(root: string, id: string): Promise<number> {
   if (epic.compliance_flags.length) {
     console.log(`\nCompliance flags: ${epic.compliance_flags.join(', ')}`);
   }
-  return epic.status === 'APPROVED' ? 0 : 1;
+  if (epic.status === 'APPROVED') {
+    console.log(`\napproved by ${epic.approval.approved_by} at ${epic.approval.approved_at}`);
+    return 0;
+  }
+
+  // The exit code is the enforced half of the gate, and it is worth saying which
+  // half that is. Nothing stops an agent from writing code without consulting
+  // this command; what it cannot do is make unapproved work *look* approved.
+  console.log(`\nnot approved: implementation of ${epic.id} is not authorised.`);
+  console.log('This exit code is the enforced gate. The stop before implementing');
+  console.log('is a workflow convention — if code already exists, it was written');
+  console.log('unapproved, not approved by bypass. Review it before it ships.');
+  return 1;
 }
 
 async function approve(root: string, id: string, by: string): Promise<number> {
