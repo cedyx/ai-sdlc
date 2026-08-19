@@ -19,7 +19,16 @@ const EFFORT: Record<Effort, string> = {
 };
 
 /** How faithfully one IR capability survived lowering. */
-export type Fidelity = 'native' | 'advisory' | 'broadened';
+/**
+ * How faithfully one IR capability survived lowering onto Codex.
+ *
+ * `native`      the runtime enforces exactly what the IR asked for.
+ * `advisory`    expressible only as instructions; a model may ignore it.
+ * `broadened`   the runtime grant is wider than requested.
+ * `unsupported` the request could not be honoured at all, and no combination of
+ *               sandbox keys expresses it without granting something else.
+ */
+export type Fidelity = 'native' | 'advisory' | 'broadened' | 'unsupported';
 
 export interface CapabilityFinding {
   capability: string;
@@ -54,19 +63,46 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   // Only meaningful under workspace-write; read-only already denies egress.
   const networkAccess = sandbox === 'workspace-write' ? network : null;
 
-  findings.push({
-    capability: `filesystem: ${filesystem}`,
-    fidelity: 'native',
-    detail: `sandbox_mode = "${sandbox}"`,
-  });
-  findings.push({
-    capability: `network: ${network}`,
-    fidelity: 'native',
-    detail:
-      networkAccess === null
-        ? 'denied by read-only sandbox'
-        : `sandbox_workspace_write.network_access = ${networkAccess}`,
-  });
+  // `none` has no Codex equivalent: the narrowest sandbox still permits
+  // inspection. Reporting it native would claim an isolation the runtime does
+  // not provide.
+  findings.push(
+    filesystem === 'none'
+      ? {
+          capability: 'filesystem: none',
+          fidelity: 'broadened',
+          detail: 'no sandbox_mode denies reading; read-only still permits inspection of the workspace.',
+        }
+      : {
+          capability: `filesystem: ${filesystem}`,
+          fidelity: 'native',
+          detail: `sandbox_mode = "${sandbox}"`,
+        },
+  );
+  // The network toggle exists only under workspace-write. A read-only role that
+  // asks for egress therefore does not get it, and calling that native would
+  // report a denial as if it were the request.
+  if (networkAccess !== null) {
+    findings.push({
+      capability: `network: ${network}`,
+      fidelity: 'native',
+      detail: `sandbox_workspace_write.network_access = ${networkAccess}`,
+    });
+  } else if (network) {
+    findings.push({
+      capability: 'network: true',
+      fidelity: 'unsupported',
+      detail:
+        'network_access is only configurable under workspace-write; a read-only role cannot be granted egress. ' +
+        'Widening the sandbox to buy it would also grant writes — give the role filesystem: write if it genuinely needs the network.',
+    });
+  } else {
+    findings.push({
+      capability: 'network: false',
+      fidelity: 'native',
+      detail: 'denied by read-only sandbox',
+    });
+  }
 
   // Codex reserves .git, .agents and .codex inside a writable root, but there
   // is no documented key to narrow writes to a path list — so an allow-list is
@@ -85,16 +121,18 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
       detail: `${write_paths.deny.join(', ')} restated as instructions; the sandbox cannot exclude paths.`,
     });
   }
-  // `read-only` genuinely denies execution, so the restriction is native there.
-  // It degrades only in `workspace-write`, which grants writes and shell together.
+  // No sandbox_mode removes shell. `read-only` gates command execution behind
+  // approval and `workspace-write` permits routine commands outright, but the IR
+  // asks for a role that *has no shell* — which is a different claim from one
+  // whose commands need escalation. Advisory in both.
   if (!shell) {
-    const native = sandbox === 'read-only';
     findings.push({
       capability: 'shell: false',
-      fidelity: native ? 'native' : 'advisory',
-      detail: native
-        ? 'denied by read-only sandbox'
-        : 'no sandbox_mode denies command execution while allowing writes; restated as instructions.',
+      fidelity: 'advisory',
+      detail:
+        sandbox === 'read-only'
+          ? 'read-only gates command execution behind approval but does not remove shell; commands may still run once approved.'
+          : 'workspace-write permits routine commands outright; no sandbox_mode denies execution while allowing writes.',
     });
   }
   if (shell && !vcs_mutate) {

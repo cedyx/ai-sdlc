@@ -109,7 +109,7 @@ function reportCodexFidelity(agents: AgentSpec[]): void {
   const weak = (f: CapabilityFinding) => f.fidelity !== 'native';
   if (!rows.some((r) => r.findings.some(weak))) return;
 
-  const mark = { native: '\u2713', advisory: '~', broadened: '!' } as const;
+  const mark = { native: '\u2713', advisory: '~', broadened: '!', unsupported: '\u2717' } as const;
   console.log('\nCodex capability report');
   for (const { name, findings } of rows) {
     console.log(`\n  ${name}`);
@@ -117,11 +117,13 @@ function reportCodexFidelity(agents: AgentSpec[]): void {
       console.log(`    ${mark[f.fidelity]} ${f.capability.padEnd(24)} ${f.detail}`);
     }
   }
-  console.log(
-    '\n  ~ advisory: instructions only, a model may ignore it.' +
-      '\n  ! broadened: the runtime grant is wider than the IR asked for.' +
-      '\n  Back both with branch protection or CI; agent config alone will not hold.',
-  );
+  const kinds = new Set(rows.flatMap((r) => r.findings.map((f) => f.fidelity)));
+  const legend: string[] = [];
+  if (kinds.has('advisory')) legend.push('  ~ advisory: instructions only, a model may ignore it.');
+  if (kinds.has('broadened')) legend.push('  ! broadened: the runtime grant is wider than the IR asked for.');
+  if (kinds.has('unsupported')) legend.push('  \u2717 unsupported: Codex cannot express this at all. The IR asks for something the generated config does not do.');
+  legend.push('  Back the rest with branch protection or CI; agent config alone will not hold.');
+  console.log('\n' + legend.join('\n'));
 }
 
 /** Prints the gate decision for an epic. Exit 0 = implementable. */

@@ -232,13 +232,18 @@ the property would no longer rest on agent separation.
 
 ## Capability asymmetry
 
-The same capability block lowers to three different strengths.
+The same capability block lowers to three different strengths. Codex's row is
+weaker than it looks: `sandbox_mode` draws a filesystem and network boundary and
+knows nothing about which *commands* run inside it, so `git commit` and
+`git diff` are indistinguishable to it. `ai-sdlc generate` prints exactly what
+survived per role, so the loss is visible at build time rather than inferred
+from this table.
 
 | Mode | Write paths | VCS mutation | Roles |
 |---|---|---|---|
 | Claude, repo | enforced per role | enforced per role | separate agents |
 | Claude, plugin | advisory | enforced, but plugin-wide | separate agents |
-| Codex, repo | advisory (`sandbox_mode` is coarse) | `sandbox_mode` | separate agents |
+| Codex, repo | broadened: `workspace-write` grants the whole workspace | advisory | separate agents |
 | Codex, plugin | — | — | not offered: agents are not a distributable component |
 
 In repo mode each agent carries its own `PreToolUse` hooks and the tool call
@@ -259,6 +264,30 @@ agent's own prompt, which says plainly that it is not backed by a hook. If you
 add a role that *may* commit, the VCS guard is dropped entirely rather than
 silently breaking that role, and the generated `hooks.json` `description` says
 so.
+
+Because Codex loses the most, `ai-sdlc generate` ends by reporting what each
+role actually got:
+
+```
+  developer
+    ✓ filesystem: write        sandbox_mode = "workspace-write"
+    ✓ network: false           sandbox_workspace_write.network_access = false
+    ~ write_paths.deny         .ai/epics/*.yaml, .ai/contract.md restated as instructions
+    ~ vcs_mutate: false        git is an ordinary binary to the sandbox
+```
+
+Four levels: `✓ native` is enforced by the runtime, `~ advisory` survives only
+as instructions a model may ignore, `! broadened` means the grant is wider than
+asked for, and `✗ unsupported` means the request was not honoured at all. That
+last one is not a warning to skim past — it says the generated config does not
+do what the IR asked. It fires today only for a read-only role that requests
+network access, since Codex's `network_access` key exists only under
+`workspace-write`; buying egress by widening the sandbox would also grant
+writes, so the generator refuses and says so.
+
+The report is unconditional. Gating it behind a flag was tempting, but every
+role in the default pipeline trips it — a permanently-on warning stops being a
+signal.
 
 None of the three modes is a security boundary. A restriction that must hold
 under an adversarial or confused model needs branch protection, CI checks, or

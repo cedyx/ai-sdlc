@@ -196,11 +196,28 @@ describe('codex capability fidelity', () => {
     expect(f?.fidelity).toBe('advisory');
   });
 
-  // workspace-write grants writes and execution together; read-only denies both.
-  // The same IR restriction is therefore enforced in one sandbox and not the other.
-  it('reports shell denial as native under a read-only sandbox', () => {
+  // No sandbox_mode removes shell. read-only gates execution behind approval,
+  // which is a weaker claim than the IR's "this role has no shell", so the
+  // restriction is advisory in *both* sandboxes -- only the reason differs.
+  it('reports shell denial as advisory under a read-only sandbox too', () => {
     const f = find({ ...base, capabilities: { filesystem: 'read', shell: false } }, 'shell: false');
-    expect(f?.fidelity).toBe('native');
+    expect(f?.fidelity).toBe('advisory');
+    expect(f?.detail).toMatch(/does not remove shell/);
+  });
+
+  // `none` is a real IR value with no Codex equivalent: the narrowest sandbox
+  // still reads. Calling that native would claim an isolation nothing provides.
+  it('reports filesystem: none as broadened, since read-only still reads', () => {
+    const f = find({ ...base, capabilities: { filesystem: 'none' } }, 'filesystem: none');
+    expect(f?.fidelity).toBe('broadened');
+  });
+
+  // network_access exists only under workspace-write, so a read-only role that
+  // asks for egress does not get it. Reporting that as a native "denial" would
+  // describe the outcome as if it were the request.
+  it('reports egress on a read-only role as unsupported, not a native denial', () => {
+    const f = find({ ...base, capabilities: { filesystem: 'read', network: true } }, 'network: true');
+    expect(f?.fidelity).toBe('unsupported');
   });
 
   it('reports a VCS restriction as advisory', () => {
@@ -220,8 +237,16 @@ describe('codex capability fidelity', () => {
     expect(axes.every((f) => f.fidelity === 'native')).toBe(true);
   });
 
-  it('leaves a read-only role with nothing weaker than native', () => {
-    const { findings } = lowerCapabilities(AgentSpec.parse({ ...base, capabilities: { filesystem: 'read' } }));
+  // The one fully-native shape: a role that asks for nothing sandbox_mode cannot
+  // draw. Every restriction beyond the two sandbox axes -- no shell, no commits,
+  // a narrower write path -- is something Codex expresses only as prose, so any
+  // *more* restricted role is necessarily lossy. Both flags are explicit because
+  // each defaults to false, and each default is itself a lossy request.
+  it('leaves an unrestricted read-only role fully native', () => {
+    const { findings } = lowerCapabilities(
+      AgentSpec.parse({ ...base, capabilities: { filesystem: 'read', shell: true, vcs_mutate: true } }),
+    );
     expect(findings.every((f) => f.fidelity === 'native')).toBe(true);
+    expect(findings.map((f) => f.capability)).toEqual(['filesystem: read', 'network: false']);
   });
 });

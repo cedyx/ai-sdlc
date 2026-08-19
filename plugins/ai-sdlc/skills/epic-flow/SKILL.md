@@ -67,6 +67,14 @@ another iteration, change the requirements, or cancel the epic.
 2. **Approve — always a hard stop.** Show the human the complete specification,
    with the open-questions section called out separately. Ask for approval once,
    for the epic as a whole.
+
+   This stop is a *workflow* gate: it holds because you follow it, and nothing in
+   the runtime prevents you from writing code instead. What is externally enforced
+   is the artifact state — `ai-sdlc approve` refuses to record an approval without
+   a named approver, and `ai-sdlc status` exits nonzero until one exists. So
+   skipping this step cannot produce an approved epic; it can only produce
+   unapproved work. Do not treat the check in step 3 as the thing that stopped
+   you.
    - Changes requested → set status CHANGES_REQUESTED, return to step 1.
    - Approved → record it with `ai-sdlc approve <id> --by <name>`.
 
