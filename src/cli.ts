@@ -106,6 +106,26 @@ async function generate(root: string): Promise<void> {
  * time makes the degradation impossible to adopt unknowingly: a role whose
  * write scope is advisory is a role that needs branch protection behind it.
  */
+/**
+ * Renders a finding's identity for the terminal.
+ *
+ * Presentation lives here, not in the finding: `capability` is a stable machine
+ * id, and the value it was asked for travels separately in `requested`.
+ */
+function formatCapabilityFinding(f: CapabilityFinding): string {
+  switch (f.capability) {
+    case 'filesystem':
+    case 'network':
+    case 'shell':
+    case 'vcs_mutate':
+      return `${f.capability}: ${String(f.requested)}`;
+    // The paths are already in the detail line; repeating them would wrap the column.
+    case 'write_paths.allow':
+    case 'write_paths.deny':
+      return f.capability;
+  }
+}
+
 function reportCodexFidelity(agents: AgentSpec[]): void {
   const rows = agents.map((spec) => ({ name: spec.name, findings: lowerCapabilities(spec).findings }));
   const weak = (f: CapabilityFinding) => f.fidelity !== 'native';
@@ -116,7 +136,7 @@ function reportCodexFidelity(agents: AgentSpec[]): void {
   for (const { name, findings } of rows) {
     console.log(`\n  ${name}`);
     for (const f of findings) {
-      console.log(`    ${mark[f.fidelity]} ${f.capability.padEnd(24)} ${f.detail}`);
+      console.log(`    ${mark[f.fidelity]} ${formatCapabilityFinding(f).padEnd(24)} ${f.detail}`);
     }
   }
   const kinds = new Set(rows.flatMap((r) => r.findings.map((f) => f.fidelity)));

@@ -30,11 +30,35 @@ const EFFORT: Record<Effort, string> = {
  */
 export type Fidelity = 'native' | 'advisory' | 'broadened' | 'unsupported';
 
-export interface CapabilityFinding {
-  capability: string;
-  fidelity: Fidelity;
-  detail: string;
-}
+/**
+ * Stable machine identity for a capability, independent of how it is displayed.
+ *
+ * Mirrors the field path in `spec.capabilities`, so a finding can be addressed
+ * by the same name the IR uses. These strings previously did double duty as
+ * display text — `'filesystem: none'`, `` `network: ${network}` `` — which made
+ * the identity vary with the requested value and put three spellings of
+ * `network` in the same union. Anything keyed on that would have had to parse
+ * the value back out of the label.
+ */
+export type CapabilityId =
+  | 'filesystem'
+  | 'network'
+  | 'write_paths.allow'
+  | 'write_paths.deny'
+  | 'shell'
+  | 'vcs_mutate';
+
+/**
+ * One capability's fate under lowering: what was asked for, what became of it.
+ *
+ * Discriminated on `capability` so `requested` carries the IR's own type rather
+ * than `unknown`. The point is exhaustiveness for whatever keys on these next:
+ * `{ capability: 'network', requested: 'write' }` must not compile.
+ */
+export type CapabilityFinding =
+  | { capability: 'filesystem'; requested: 'none' | 'read' | 'write'; fidelity: Fidelity; detail: string }
+  | { capability: 'network' | 'shell' | 'vcs_mutate'; requested: boolean; fidelity: Fidelity; detail: string }
+  | { capability: 'write_paths.allow' | 'write_paths.deny'; requested: string[]; fidelity: Fidelity; detail: string };
 
 export interface CodexLowering {
   /** `sandbox_mode` value. */
@@ -69,12 +93,14 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   findings.push(
     filesystem === 'none'
       ? {
-          capability: 'filesystem: none',
+          capability: 'filesystem',
+          requested: 'none',
           fidelity: 'broadened',
           detail: 'no sandbox_mode denies reading; read-only still permits inspection of the workspace.',
         }
       : {
-          capability: `filesystem: ${filesystem}`,
+          capability: 'filesystem',
+          requested: filesystem,
           fidelity: 'native',
           detail: `sandbox_mode = "${sandbox}"`,
         },
@@ -84,13 +110,15 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   // report a denial as if it were the request.
   if (networkAccess !== null) {
     findings.push({
-      capability: `network: ${network}`,
+      capability: 'network',
+      requested: network,
       fidelity: 'native',
       detail: `sandbox_workspace_write.network_access = ${networkAccess}`,
     });
   } else if (network) {
     findings.push({
-      capability: 'network: true',
+      capability: 'network',
+      requested: true,
       fidelity: 'unsupported',
       detail:
         'network_access is only configurable under workspace-write; a read-only role cannot be granted egress. ' +
@@ -98,7 +126,8 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
     });
   } else {
     findings.push({
-      capability: 'network: false',
+      capability: 'network',
+      requested: false,
       fidelity: 'native',
       detail: 'denied by read-only sandbox',
     });
@@ -110,6 +139,7 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   if (filesystem === 'write' && write_paths?.allow) {
     findings.push({
       capability: 'write_paths.allow',
+      requested: write_paths.allow,
       fidelity: 'broadened',
       detail: `IR allows only ${write_paths.allow.join(', ')}; workspace-write permits the whole workspace. Restated as instructions.`,
     });
@@ -117,6 +147,7 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   if (filesystem === 'write' && write_paths?.deny) {
     findings.push({
       capability: 'write_paths.deny',
+      requested: write_paths.deny,
       fidelity: 'advisory',
       detail: `${write_paths.deny.join(', ')} restated as instructions; the sandbox cannot exclude paths.`,
     });
@@ -127,7 +158,8 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   // whose commands need escalation. Advisory in both.
   if (!shell) {
     findings.push({
-      capability: 'shell: false',
+      capability: 'shell',
+      requested: false,
       fidelity: 'advisory',
       detail:
         sandbox === 'read-only'
@@ -137,7 +169,8 @@ export function lowerCapabilities(spec: AgentSpec): CodexLowering {
   }
   if (shell && !vcs_mutate) {
     findings.push({
-      capability: 'vcs_mutate: false',
+      capability: 'vcs_mutate',
+      requested: false,
       fidelity: 'advisory',
       detail: 'git is an ordinary binary to the sandbox; restated as instructions. Back with branch protection.',
     });

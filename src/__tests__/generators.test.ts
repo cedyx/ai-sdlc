@@ -192,7 +192,7 @@ describe('codex capability fidelity', () => {
   });
 
   it('reports shell denial as advisory when writes are allowed', () => {
-    const f = find({ ...base, capabilities: { filesystem: 'write', shell: false } }, 'shell: false');
+    const f = find({ ...base, capabilities: { filesystem: 'write', shell: false } }, 'shell');
     expect(f?.fidelity).toBe('advisory');
   });
 
@@ -200,7 +200,7 @@ describe('codex capability fidelity', () => {
   // which is a weaker claim than the IR's "this role has no shell", so the
   // restriction is advisory in *both* sandboxes -- only the reason differs.
   it('reports shell denial as advisory under a read-only sandbox too', () => {
-    const f = find({ ...base, capabilities: { filesystem: 'read', shell: false } }, 'shell: false');
+    const f = find({ ...base, capabilities: { filesystem: 'read', shell: false } }, 'shell');
     expect(f?.fidelity).toBe('advisory');
     expect(f?.detail).toMatch(/does not remove shell/);
   });
@@ -208,7 +208,7 @@ describe('codex capability fidelity', () => {
   // `none` is a real IR value with no Codex equivalent: the narrowest sandbox
   // still reads. Calling that native would claim an isolation nothing provides.
   it('reports filesystem: none as broadened, since read-only still reads', () => {
-    const f = find({ ...base, capabilities: { filesystem: 'none' } }, 'filesystem: none');
+    const f = find({ ...base, capabilities: { filesystem: 'none' } }, 'filesystem');
     expect(f?.fidelity).toBe('broadened');
   });
 
@@ -216,14 +216,14 @@ describe('codex capability fidelity', () => {
   // asks for egress does not get it. Reporting that as a native "denial" would
   // describe the outcome as if it were the request.
   it('reports egress on a read-only role as unsupported, not a native denial', () => {
-    const f = find({ ...base, capabilities: { filesystem: 'read', network: true } }, 'network: true');
+    const f = find({ ...base, capabilities: { filesystem: 'read', network: true } }, 'network');
     expect(f?.fidelity).toBe('unsupported');
   });
 
   it('reports a VCS restriction as advisory', () => {
     const f = find(
       { ...base, capabilities: { filesystem: 'write', shell: true, vcs_mutate: false } },
-      'vcs_mutate: false',
+      'vcs_mutate',
     );
     expect(f?.fidelity).toBe('advisory');
   });
@@ -232,7 +232,7 @@ describe('codex capability fidelity', () => {
     const { findings } = lowerCapabilities(
       AgentSpec.parse({ ...base, capabilities: { filesystem: 'write', network: true } }),
     );
-    const axes = findings.filter((f) => /^(filesystem|network):/.test(f.capability));
+    const axes = findings.filter((f) => f.capability === 'filesystem' || f.capability === 'network');
     expect(axes).toHaveLength(2);
     expect(axes.every((f) => f.fidelity === 'native')).toBe(true);
   });
@@ -247,6 +247,6 @@ describe('codex capability fidelity', () => {
       AgentSpec.parse({ ...base, capabilities: { filesystem: 'read', shell: true, vcs_mutate: true } }),
     );
     expect(findings.every((f) => f.fidelity === 'native')).toBe(true);
-    expect(findings.map((f) => f.capability)).toEqual(['filesystem: read', 'network: false']);
+    expect(findings.map((f) => f.capability)).toEqual(['filesystem', 'network']);
   });
 });

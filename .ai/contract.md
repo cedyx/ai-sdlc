@@ -93,6 +93,21 @@ denied network request `native`, describing the outcome as if it were the
 request. When documenting a restriction, name the mechanism and say which of the
 three modes actually runs it; if the answer is "none, it is prose", say that.
 
+## Capability findings are addressed, not read
+
+`CapabilityFinding.capability` is a machine id mirroring the IR field path, and
+the value the role asked for travels separately in `requested`. These were one
+string once — `'filesystem: none'`, `` `network: ${network}` `` — which put three
+spellings of `network` in what should be a single addressable key, so anything
+keying on a finding had to parse the value back out of a human-facing label.
+
+The union is therefore discriminated on `capability`: `requested` carries the
+IR's own type, and `{ capability: 'network', requested: 'write' }` does not
+compile. Presentation belongs to the CLI's `formatCapabilityFinding`, not to the
+finding. Note that moving it there is invisible to `tsc` — `capability` is still
+a string, merely the wrong one for display — so a change here is verified by
+diffing `generate` output, not by a clean typecheck.
+
 ## Capability asymmetry between providers
 
 Claude enforces write-path and VCS limits with PreToolUse hooks, which are
