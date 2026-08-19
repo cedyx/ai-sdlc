@@ -54,6 +54,21 @@ exits nonzero unless the artifact is APPROVED with a recorded approver, and
 CLI, where it is identical across providers, rather than in per-provider agent
 configuration.
 
+## The IR expresses intent, not enforcement
+
+A field in `src/schema/agent.ts` says what a role *wants*. It implies nothing
+about anything stopping the role from doing otherwise. `lowerCapabilities` in
+the Codex generator is the authority on what became of a given field, reporting
+each as `native`, `advisory`, `broadened`, or `unsupported`; `generate` prints
+the result.
+
+Two bugs came from ignoring this, and both read as reasonable at the time. A
+comment here claimed `sandbox_mode` enforced a `git commit` ban -- it cannot
+distinguish `git commit` from `git diff`. The report called a read-only role's
+denied network request `native`, describing the outcome as if it were the
+request. When documenting a restriction, name the mechanism and say which of the
+three modes actually runs it; if the answer is "none, it is prose", say that.
+
 ## Capability asymmetry between providers
 
 Claude enforces write-path and VCS limits with PreToolUse hooks, which are
