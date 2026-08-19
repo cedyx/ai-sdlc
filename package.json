@@ -2,6 +2,22 @@
   "name": "ai-sdlc",
   "version": "0.1.0",
   "description": "Provider-neutral agent SDLC pipeline: one source of truth compiled to Claude Code and Codex",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cedyx/ai-sdlc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cedyx/ai-sdlc/issues"
+  },
+  "homepage": "https://github.com/cedyx/ai-sdlc#readme",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "agents",
+    "sdlc",
+    "code-generation"
+  ],
   "type": "module",
   "bin": {
     "ai-sdlc": "./dist/cli.js"
@@ -9,7 +25,9 @@
   "files": [
     "dist",
     ".ai",
-    "scripts"
+    "!.ai/epics",
+    "scripts",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"
