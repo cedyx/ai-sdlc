@@ -12,6 +12,7 @@ import { Epic } from './schema/epic.js';
 import { generateClaudeAgent } from './generators/claude.js';
 import { generateCodexAgent, lowerCapabilities, type CapabilityFinding } from './generators/codex.js';
 import { generateContracts } from './generators/contracts.js';
+import { generateCiWorkflow } from './enforcement/ci.js';
 import {
   generatePluginAgent,
   generatePluginHooks,
@@ -20,19 +21,13 @@ import {
 } from './generators/plugin.js';
 import { FilesystemBacklog } from './backlog/filesystem.js';
 import { GitHubIssuesBacklog } from './backlog/github.js';
-import type { BacklogProvider } from './backlog/provider.js';
+import { makeBacklog } from './backlog/provider.js';
 
 const AI_DIR = '.ai';
 
 async function loadConfig(root: string): Promise<Config> {
   const raw = await readFile(join(root, AI_DIR, 'config.yaml'), 'utf8');
   return Config.parse(parse(raw));
-}
-
-export function makeBacklog(config: Config, root: string): BacklogProvider {
-  return config.backlog.kind === 'github-issues'
-    ? new GitHubIssuesBacklog(config.backlog.repo, { epicLabel: config.backlog.epic_label })
-    : new FilesystemBacklog(join(root, config.backlog.dir));
 }
 
 async function loadAgents(root: string): Promise<AgentSpec[]> {
@@ -92,6 +87,13 @@ async function generate(root: string): Promise<void> {
 
   if (config.providers.includes('claude')) await linkSkills(root, '.claude');
   if (config.providers.includes('codex')) await linkSkills(root, '.agents');
+
+  // Unconditional, and deliberately outside the provider branches: the gate
+  // constrains what enters the repository, which is true whichever agent wrote
+  // the code, or none. Making it provider-conditional would let removing a
+  // provider quietly remove the enforcement boundary.
+  const ci = generateCiWorkflow();
+  await write(root, ci.path, ci.content);
 
   if (config.providers.includes('codex')) reportCodexFidelity(agents);
 }

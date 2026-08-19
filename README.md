@@ -180,7 +180,7 @@ agent talks itself past a prompt.
 ai-sdlc init                     # seed .ai/ + scripts/hooks/ (refuses to overwrite)
 ai-sdlc generate                 # compile .ai/ -> provider files
 ai-sdlc plugin build             # compile .ai/ -> plugin tree at repo root
-ai-sdlc status <epic-id>         # gate check; exit 0/1/2
+ai-sdlc status <epic-id>         # gate check; exit 0 approved / 1 not / 2 unknown
 ai-sdlc approve <id> --by <name> # record approver + timestamp
 ```
 
@@ -219,9 +219,32 @@ ai-sdlc status EPIC-123    # exit 0 only if APPROVED with a recorded approver
 
 `Epic` refuses to parse `status: APPROVED` unless `approved_by` and
 `approved_at` are both set, so a hand-edited artifact fails validation rather
-than passing the gate. Wire that exit code into whatever actually gates the
-work — a CI job, a pre-push hook, branch protection on the implementation
-branch. Prompt-level instructions are the fallback, not the mechanism.
+than passing the gate. Prompt-level instructions are the fallback, not the
+mechanism.
+
+`ai-sdlc generate` emits `.github/workflows/approval-gate.yml`, which consumes
+that exit code on every pull request. It reads an `AI-SDLC-Epic: EPIC-123` line
+from the pull request body, resolves it, and fails unless that epic is APPROVED
+with a recorded approver. State the property it establishes precisely:
+
+> No pull request passes the approval gate unless it identifies an approved epic.
+
+Not "the change implements that epic". The association is author-supplied, so
+whoever opens the pull request can point it at any approved epic; verifying that
+the diff actually delivers the acceptance criteria is review's job, and no exit
+code substitutes for it. What the check removes is the *silent* path — merging
+implementation while no human ever read a specification.
+
+It fails closed. A missing marker is not an exemption, a malformed id is not
+guessed at, and an id naming no epic fails rather than being skipped; the four
+outcomes get distinct exit codes so a CI log says which one happened. The gate
+is generated unconditionally, outside the provider branches, because it
+constrains what enters the repository rather than what a role may do — dropping
+a provider from `.ai/config.yaml` must not quietly drop the boundary.
+
+The check existing is not the same as merge being blocked on it. That second
+step is branch protection: repository-host configuration, not generated output.
+Until it is set, the gate reports and does not prevent.
 
 This is why capability asymmetry between providers matters less than it looks:
 once the gate is a nonzero exit, it is identical everywhere, and each provider's

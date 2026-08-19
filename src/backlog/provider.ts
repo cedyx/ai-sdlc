@@ -1,4 +1,8 @@
+import { join } from 'node:path';
+import type { Config } from '../schema/config.js';
 import type { Epic, EpicStatus } from '../schema/epic.js';
+import { FilesystemBacklog } from './filesystem.js';
+import { GitHubIssuesBacklog } from './github.js';
 
 /**
  * Persistence boundary for epic artifacts.
@@ -38,4 +42,17 @@ export class EpicNotFoundError extends Error {
     super(`epic ${id} not found in ${kind} backlog`);
     this.name = 'EpicNotFoundError';
   }
+}
+
+/**
+ * Constructs the provider named by config.
+ *
+ * Lives here rather than in the CLI because it is not a CLI concern: the CI gate
+ * needs it too, and importing it from `cli.ts` would run `main()` as a side
+ * effect of asking for a backlog.
+ */
+export function makeBacklog(config: Config, root: string): BacklogProvider {
+  return config.backlog.kind === 'github-issues'
+    ? new GitHubIssuesBacklog(config.backlog.repo, { epicLabel: config.backlog.epic_label })
+    : new FilesystemBacklog(join(root, config.backlog.dir));
 }

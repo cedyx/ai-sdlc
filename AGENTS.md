@@ -25,6 +25,11 @@ workflow, and the same repo conventions work in either tool.
   the two outputs are deliberately different files.
 - `src/backlog/` implements `BacklogProvider`. Provider-specific vocabulary
   (issue numbers, labels, file paths) must not escape this directory.
+- `src/enforcement/` holds the boundary itself, and is provider-neutral for the
+  same reason `src/backlog/` is: it constrains what enters the repository, which
+  is true whichever agent wrote the code, or none. Nothing here may import from
+  `src/generators/`. Emitting the CI workflow from `generate` is a convenience of
+  packaging, not evidence it belongs to a provider.
 - `.claude-plugin/` and `plugins/ai-sdlc/` at the repo root are generated too,
   but committed on purpose: `claude plugin marketplace add <owner>/<repo>` reads
   them from the default branch, which is what makes installing one step. Change
@@ -55,6 +60,25 @@ exits nonzero unless the artifact is APPROVED with a recorded approver, and
 `Epic` refuses to parse APPROVED without one. New enforcement belongs in the
 CLI, where it is identical across providers, rather than in per-provider agent
 configuration.
+
+The CI check in `src/enforcement/` closes the loop by consuming that exit code,
+and its claim is narrower than it first reads:
+
+> No pull request passes the approval gate unless it identifies an approved epic.
+
+It does not prove the change implements that epic. The `AI-SDLC-Epic:` marker is
+author-supplied, so a confused or adversarial author can point at any approved
+epic; only review establishes the semantic relationship. Do not widen that
+sentence in docs or output. Inferring the epic from changed files was rejected
+for the same reason it looks attractive — its failure mode is a green check that
+proves the wrong thing, which is worse than no check.
+
+Checking global state instead was rejected too: with `DRAFT` and
+`CHANGES_REQUESTED` both legitimately long-lived, requiring every non-terminal
+epic to be approved would block unrelated work for days, and passing would still
+not show that *this* change belongs to an approved epic. Resist adding an
+`IN_PROGRESS` status to make such a scan viable; that would let an enforcement
+detail leak backward into the domain model.
 
 ## The IR expresses intent, not enforcement
 
