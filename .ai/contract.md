@@ -28,10 +28,16 @@ workflow, and the same repo conventions work in either tool.
   is true whichever agent wrote the code, or none. Nothing here may import from
   `src/generators/`. Emitting the CI workflow from `generate` is a convenience of
   packaging, not evidence it belongs to a provider.
-- `.claude-plugin/` and `plugins/ai-sdlc/` at the repo root are generated too,
-  but committed on purpose: `claude plugin marketplace add <owner>/<repo>` reads
-  them from the default branch, which is what makes installing one step. Change
-  `.ai/`, then `ai-sdlc plugin build`; do not edit the tree.
+- `.claude-plugin/`, `.agents/plugins/`, and `plugins/ai-sdlc/` at the repo
+  root are generated too, but committed on purpose: plugin marketplace commands
+  read them from the default branch, which is what makes installing one step.
+  Change `.ai/`, then `ai-sdlc plugin build`; do not edit the tree.
+- Treat Claude and Codex plugin packaging as one feature with two manifests.
+  When changing shared plugin content, install instructions, versioning, or
+  marketplace metadata, update both provider surfaces in the same change unless
+  the difference is explicitly provider-specific. Cover that with
+  `src/__tests__/plugin.test.ts`, which is the regression check that `plugin
+  build` still emits both sides from the same source.
 - Generated files are build output. Never hand-edit `.claude/agents/*`,
   `.codex/agents/*`, `CLAUDE.md`, `AGENTS.md`, or the root plugin tree.
 
@@ -174,16 +180,17 @@ loader silently discards per-agent hooks, and the PreToolUse payload has no
 agent identity, so only restrictions shared by every role can be enforced and
 the rest are prose.
 
-Codex is not offered as a plugin at all. Codex supports plugins and custom
-subagents, but agent definitions are not currently a distributable plugin
-component, so installing one would carry the workflow without the two role
-configurations. Repo mode emits `.codex/agents/*.toml` instead and keeps the
-topology. Revisit if the format gains agents.
+Codex is offered as a plugin for the shared workflow skill. Codex supports
+plugins and custom subagents, but agent definitions are not currently a
+distributable plugin component, so installing the plugin carries `epic-flow`
+without the two native role configurations. Repo mode emits
+`.codex/agents/*.toml` instead and keeps the topology. Revisit if the plugin
+format gains agent definitions.
 
-Do not justify that choice by appealing to the approval gate. The gate is
-`ai-sdlc status` and holds regardless of how many agents are configured; what a
-Codex plugin cannot reproduce is role separation. Conflating the two is the same
-error as treating agent separation as an authorization boundary.
+Do not justify the Codex plugin shape by appealing to the approval gate. The
+gate is `ai-sdlc status` and holds regardless of how many agents are configured;
+what the Codex plugin does not reproduce is role separation. Conflating the two
+is the same error as treating agent separation as an authorization boundary.
 
 A restriction that must hold under an adversarial or confused model therefore
 needs a second layer — branch protection, CI checks, or review — not agent

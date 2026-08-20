@@ -16,12 +16,13 @@ generates each provider's native files.
 | Capability enforcement | provider-specific: Claude hooks vs Codex sandbox |
 | Repo contract | one source, generated to `CLAUDE.md` and `AGENTS.md` |
 | Backlog state | provider-neutral artifact behind `BacklogProvider` |
-| Plugin packaging | Claude: committed tree, installable from the repo |
+| Plugin packaging | committed Claude and Codex metadata, installable from the repo |
 
 ## Layout
 
 ```
-.claude-plugin/             marketplace manifest (generated, committed)
+.claude-plugin/             Claude marketplace manifest (generated, committed)
+.agents/plugins/            Codex marketplace manifest (generated, committed)
 plugins/ai-sdlc/           the plugin itself (generated, committed)
 
 .ai/                        source of truth
@@ -76,13 +77,20 @@ Everything is picked up from the checkout — there is nothing to configure.
   write outside the allowed globs, or a `git commit` from the developer role,
   fails the tool call.
 
-## Install as a plugin
+## Install As A Plugin
 
 This repo *is* a plugin marketplace. Nothing to clone, build, or npm-install:
 
 ```bash
 claude plugin marketplace add cedyx/ai-sdlc
 claude plugin install ai-sdlc@ai-sdlc-marketplace
+```
+
+For Codex, use the same Git marketplace:
+
+```bash
+codex plugin marketplace add cedyx/ai-sdlc --ref main
+codex plugin add ai-sdlc@ai-sdlc-marketplace
 ```
 
 The slash-command equivalent, and why both lines must run in the same client,
@@ -95,32 +103,44 @@ claude plugin marketplace update ai-sdlc-marketplace
 claude plugin update ai-sdlc@ai-sdlc-marketplace
 ```
 
+For Codex:
+
+```bash
+codex plugin marketplace upgrade ai-sdlc-marketplace
+codex plugin add ai-sdlc@ai-sdlc-marketplace
+```
+
 The first refreshes the checkout; the second installs it. Only the second
 changes what runs, because the plugin cache is keyed by version and the cached
 copy is what executes — see [*Update it*](GUIDE.md#update-it).
 
-You get both agents, the `epic-flow` skill, and the guard scripts. The consuming
-repo needs no `.ai/`, no `.claude/`, and no `node_modules`.
+Claude gets both plugin agents, the `epic-flow` skill, and the guard scripts.
+Codex gets the `epic-flow` skill through its native plugin manifest. The
+consuming repo needs no `.ai/`, no `.claude/`, no `.codex/`, and no
+`node_modules`.
 
 Two things the plugin cannot bring, both by nature rather than omission:
 
 - **The repo contract.** `CLAUDE.md` describes *your* codebase, so it can only
   come from your own `.ai/contract.md` via `generate`.
-- **Per-role capability enforcement.** See *Capability asymmetry* — plugin mode
-  enforces the VCS guard but demotes write-path limits to prose.
+- **Per-role capability enforcement.** See *Capability asymmetry* — Claude
+  plugin mode enforces the VCS guard but demotes write-path limits to prose;
+  Codex plugin mode ships the shared workflow skill, not role sandboxes.
 
 Use `init` + `generate` when you want the definitions versioned in your repo and
 editable per project; use the plugin when you want the pipeline as-is.
 
 ### Publishing your own
 
-The tree at `.claude-plugin/` and `plugins/` is generated and committed, which is
-what makes the install one step — `marketplace add` reads it straight from the
-default branch. If you fork and change `.ai/`, regenerate and commit:
+The trees at `.claude-plugin/`, `.agents/plugins/`, and `plugins/` are generated
+and committed, which is what makes the install one step — `marketplace add`
+reads them straight from the default branch. If you fork and change `.ai/`,
+regenerate and commit:
 
 ```bash
 ai-sdlc plugin build     # writes to the repo root
 claude plugin validate . --strict
+# Optional: validate plugins/ai-sdlc with Codex's plugin validator.
 ```
 
 ## Using it from Codex
@@ -137,20 +157,21 @@ Same checkout, different files.
   Codex these are instructions, not enforcement.
 
 
-Codex supports plugins and custom subagents, but custom agent definitions are
-not currently a distributable component of a Codex plugin. `ai-sdlc` therefore
-does not publish one: it would install the shared workflow without installing
-the separate business-analyst and developer configurations. The plugin surface
-could approximate the workflow with skills, but the installed result would not
-reproduce the two-role topology that repo mode does.
+Codex can also install the plugin directly:
 
-`init` + `generate` emits native `.codex/agents/*.toml` instead, which keeps the
-same role structure as the Claude setup.
+```bash
+codex plugin marketplace add cedyx/ai-sdlc --ref main
+codex plugin add ai-sdlc@ai-sdlc-marketplace
+```
+
+The Codex plugin carries the shared `epic-flow` skill. For repo-specific role
+separation, `init` + `generate` still emits native `.codex/agents/*.toml`,
+which keeps the same business-analyst/developer topology as the Claude setup.
 
 The approval boundary does not depend on that topology. `ai-sdlc status`
 enforces artifact state independently of how many agents are configured — see
-*Where the gate actually holds*. Role separation is what the plugin cannot
-carry; the gate is not.
+*Where the gate actually holds*. The Codex plugin does not carry native role
+sandboxes; the gate is not weakened by that.
 ## The workflow
 
 The two roles hand off through the epic artifact, not through conversation.
@@ -263,9 +284,9 @@ Until it is set, the gate reports and does not prevent.
 This is why capability asymmetry between providers matters less than it looks:
 once the gate is a nonzero exit, it is identical everywhere, and each provider's
 agent configuration is left to express division of labour rather than security.
-Moving the remaining enforcement into the CLI is the direction of travel — and
-the point at which a Codex skills-only plugin would become safe to ship, since
-the property would no longer rest on agent separation.
+Moving the remaining enforcement into the CLI is the direction of travel: the
+Codex plugin already ships the workflow skill, while repo mode remains the way
+to get provider-native role separation.
 
 ## Capability asymmetry
 
@@ -281,7 +302,7 @@ from this table.
 | Claude, repo | enforced per role | enforced per role | separate agents |
 | Claude, plugin | advisory | enforced, but plugin-wide | separate agents |
 | Codex, repo | broadened: `workspace-write` grants the whole workspace | advisory | separate agents |
-| Codex, plugin | — | — | not offered: agents are not a distributable component |
+| Codex, plugin | advisory through the skill | advisory through the skill | workflow skill only |
 
 In repo mode each agent carries its own `PreToolUse` hooks and the tool call
 fails. Plugin mode cannot do this, for two reasons verified against a live

@@ -189,3 +189,67 @@ export function generateMarketplaceManifest(meta: PluginMeta): string {
     ) + '\n'
   );
 }
+
+export function generateCodexPluginManifest(meta: PluginMeta): string {
+  return (
+    JSON.stringify(
+      {
+        name: meta.name,
+        version: meta.version,
+        description: meta.description,
+        author: { name: meta.author },
+        homepage: `https://github.com/cedyx/${meta.name}#readme`,
+        repository: `https://github.com/cedyx/${meta.name}`,
+        license: 'MIT',
+        keywords: ['codex', 'agents', 'sdlc', 'workflow'],
+        skills: './skills/',
+        interface: {
+          displayName: 'ai-sdlc',
+          shortDescription: 'Run the ai-sdlc epic workflow in Codex.',
+          longDescription:
+            'Provider-neutral agent SDLC pipeline workflow for specifying, approving, implementing, and verifying epics.',
+          developerName: meta.author,
+          category: 'Productivity',
+          capabilities: ['Interactive', 'Write'],
+          defaultPrompt: [
+            'Run the ai-sdlc epic flow for an approved epic',
+            'Draft an ai-sdlc epic specification',
+            'Check whether an ai-sdlc epic is approved',
+          ],
+          brandColor: '#2563EB',
+        },
+      },
+      null,
+      2,
+    ) + '\n'
+  );
+}
+
+export function generateCodexMarketplaceManifest(meta: PluginMeta): string {
+  return (
+    JSON.stringify(
+      {
+        name: `${meta.name}-marketplace`,
+        interface: {
+          displayName: 'ai-sdlc',
+        },
+        plugins: [
+          {
+            name: meta.name,
+            source: {
+              source: 'local',
+              path: `./plugins/${meta.name}`,
+            },
+            policy: {
+              installation: 'AVAILABLE',
+              authentication: 'ON_INSTALL',
+            },
+            category: 'Productivity',
+          },
+        ],
+      },
+      null,
+      2,
+    ) + '\n'
+  );
+}

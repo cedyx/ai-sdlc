@@ -1,0 +1,35 @@
+{
+  "name": "ai-sdlc",
+  "version": "0.2.0",
+  "description": "Provider-neutral agent SDLC pipeline: one source of truth compiled to Claude Code and Codex",
+  "author": {
+    "name": "ai-sdlc"
+  },
+  "homepage": "https://github.com/cedyx/ai-sdlc#readme",
+  "repository": "https://github.com/cedyx/ai-sdlc",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "agents",
+    "sdlc",
+    "workflow"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ai-sdlc",
+    "shortDescription": "Run the ai-sdlc epic workflow in Codex.",
+    "longDescription": "Provider-neutral agent SDLC pipeline workflow for specifying, approving, implementing, and verifying epics.",
+    "developerName": "ai-sdlc",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Run the ai-sdlc epic flow for an approved epic",
+      "Draft an ai-sdlc epic specification",
+      "Check whether an ai-sdlc epic is approved"
+    ],
+    "brandColor": "#2563EB"
+  }
+}

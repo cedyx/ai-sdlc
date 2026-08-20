@@ -19,6 +19,8 @@ import {
   generatePluginHooks,
   generatePluginManifest,
   generateMarketplaceManifest,
+  generateCodexPluginManifest,
+  generateCodexMarketplaceManifest,
 } from './generators/plugin.js';
 import { FilesystemBacklog } from './backlog/filesystem.js';
 import { GitHubIssuesBacklog } from './backlog/github.js';
@@ -346,13 +348,14 @@ async function init(root: string): Promise<number> {
 }
 
 /**
- * Emits a Claude Code plugin tree, so a consuming repo can install the pipeline
- * instead of running `init` + `generate` and committing provider files.
+ * Emits plugin trees for Claude Code and Codex, so a consuming repo can install
+ * the pipeline instead of running `init` + `generate` and committing provider
+ * files.
  *
  * Defaults to *this* repo's root, because that is what makes the install one
- * step for a consumer: `claude plugin marketplace add <owner>/<repo>` clones
- * the repo and looks for `.claude-plugin/marketplace.json` at its root. Build
- * to a throwaway directory and there is nothing to point an install at.
+ * step for a consumer: plugin marketplace commands clone the repo and look for
+ * marketplace metadata at its root. Build to a throwaway directory and there is
+ * nothing to point an install at.
  *
  * Not a packaging of the `generate` output: plugin-shipped agents may not carry
  * `hooks` or `permissionMode`, and the loader drops them without a word. See
@@ -381,8 +384,11 @@ async function buildPlugin(root: string, outDir: string): Promise<number> {
   };
 
   await emit(join('.claude-plugin', 'marketplace.json'), generateMarketplaceManifest(meta));
+  await emit(join('.agents', 'plugins', 'marketplace.json'), generateCodexMarketplaceManifest(meta));
   await emit(join('plugins', meta.name, '.claude-plugin', 'plugin.json'),
     generatePluginManifest(meta));
+  await emit(join('plugins', meta.name, '.codex-plugin', 'plugin.json'),
+    generateCodexPluginManifest(meta));
 
   for (const spec of agents) {
     await emit(join('plugins', meta.name, 'agents', `${spec.name}.md`),
@@ -408,6 +414,7 @@ async function buildPlugin(root: string, outDir: string): Promise<number> {
   console.log(`  ${outDir}/plugins/${meta.name}/scripts/hooks/`);
 
   console.log(`\nValidate with: claude plugin validate ${outDir}`);
+  console.log(`Validate Codex manifest with your Codex plugin validator against ${join(outDir, 'plugins', meta.name)}.`);
   console.log('Commit the tree so consumers can install it directly from the repo.');
   return 0;
 }
