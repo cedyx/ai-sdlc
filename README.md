@@ -280,16 +280,23 @@ install rather than read from docs:
   drops them **silently** — no runtime error, and `claude plugin validate
   --strict` passes. Shipping the repo-mode agents as-is would produce agents
   that look enforced and are not.
-- The `PreToolUse` payload carries no agent identity, so a plugin-level hook
-  cannot tell which role called it.
+- A `PreToolUse` matcher selects on the tool, not the caller, so a plugin-level
+  hook fires for every role — and for the orchestrating session as well. What
+  the payload does carry is `agent_id`, set only inside a subagent, so a hook
+  *script* can tell a subagent from the session even though the matcher cannot.
 
 So `plugin build` moves what it can into a plugin-wide `hooks/hooks.json` — the
 VCS guard, which every role in the default pipeline shares — and demotes the
 rest to a `## Capability restrictions (advisory in plugin mode)` section in the
-agent's own prompt, which says plainly that it is not backed by a hook. If you
-add a role that *may* commit, the VCS guard is dropped entirely rather than
-silently breaking that role, and the generated `hooks.json` `description` says
-so.
+agent's own prompt, which says plainly that it is not backed by a hook.
+
+The VCS guard is only safe plugin-wide because `block-vcs-mutations.sh` exits
+early when `agent_id` is absent. Without that check the guard would also block
+the orchestrating session, whose job is to commit each epic once the implementer
+leaves the work in the tree — the pipeline would stop at its last step. The
+check cannot separate one subagent from another, so if you add a role that *may*
+commit, the guard is dropped entirely rather than silently breaking that role,
+and the generated `hooks.json` `description` says so.
 
 Because Codex loses the most, `ai-sdlc generate` ends by reporting what each
 role actually got:

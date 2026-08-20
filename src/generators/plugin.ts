@@ -103,10 +103,13 @@ function pluginEnforcementNotice(spec: AgentSpec): string {
 
 /**
  * The plugin-wide guard. Scoped to what is true for every role, because the
- * hook cannot tell which role is calling it.
+ * matcher cannot tell which role is calling it.
  *
- * Emitting a *narrower* rule here would be worse than emitting none: it would
- * block the orchestrator from committing, which is its job.
+ * The VCS guard is safe to emit plugin-wide only because the script itself
+ * distinguishes caller from matcher: it exits early when `agent_id` is absent,
+ * which is how the orchestrating session -- the actor whose job is to commit --
+ * is told apart from a subagent. Without that check a blanket rule here would
+ * block the commit step the pipeline depends on.
  */
 export function generatePluginHooks(specs: AgentSpec[]): string {
   const shellRoles = specs.filter((s) => s.capabilities.shell);
@@ -115,9 +118,10 @@ export function generatePluginHooks(specs: AgentSpec[]): string {
   // Only when *no* shell-capable role may mutate VCS is a blanket block correct.
   const allDenyVcs = shellRoles.length > 0 && shellRoles.every((s) => !s.capabilities.vcs_mutate);
 
-  // A role that *may* commit collapses the guard for every role, because the
-  // hook cannot tell them apart. Silence here would read as "nothing to
-  // enforce"; say it instead, so the gap is a decision and not a surprise.
+  // A role that *may* commit collapses the guard for every role: the script can
+  // separate subagent from session, but not one subagent from another. Silence
+  // here would read as "nothing to enforce"; say it instead, so the gap is a
+  // decision and not a surprise.
   const degraded = shellRoles.filter((s) => s.capabilities.vcs_mutate).map((s) => s.name);
 
   if (allDenyVcs) {
@@ -142,7 +146,7 @@ export function generatePluginHooks(specs: AgentSpec[]): string {
   const doc = {
     description:
       'ai-sdlc capability guards. Plugin-level because the loader discards per-agent hooks; ' +
-      'scoped to restrictions common to every role because the PreToolUse payload has no agent identity.' +
+      'scoped to restrictions common to every role because the PreToolUse matcher carries no agent identity.' +
       note,
     hooks,
   };

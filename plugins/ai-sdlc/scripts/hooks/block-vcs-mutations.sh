@@ -10,6 +10,12 @@ command=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty')
 
 [ -z "$command" ] && exit 0
 
+# `agent_id` is set only inside a subagent, so its absence means the
+# orchestrating session -- which is the actor that must commit. A plugin-level
+# hook fires for both, and has no matcher that can tell them apart.
+agent_id=$(printf '%s' "$payload" | jq -r '.agent_id // empty')
+[ -z "$agent_id" ] && exit 0
+
 # Matches the verb after `git`, tolerating global flags such as -C <dir>.
 if printf '%s' "$command" | grep -Eq '(^|[;&|]|\$\()[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(commit|push|tag|merge|rebase|reset|cherry-pick|revert)\b'; then
   echo "VCS mutation denied: committing and releasing belong to the orchestrator. Leave changes in the working tree." >&2

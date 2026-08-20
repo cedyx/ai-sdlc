@@ -1,5 +1,5 @@
 {
-  "description": "ai-sdlc capability guards. Plugin-level because the loader discards per-agent hooks; scoped to restrictions common to every role because the PreToolUse payload has no agent identity.",
+  "description": "ai-sdlc capability guards. Plugin-level because the loader discards per-agent hooks; scoped to restrictions common to every role because the PreToolUse matcher carries no agent identity.",
   "hooks": {
     "PreToolUse": [
       {
