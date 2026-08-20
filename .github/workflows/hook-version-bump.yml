@@ -1,0 +1,50 @@
+# Hook scripts ship to users through a version-keyed plugin cache, so a fix
+# merged without a version bump never reaches an existing install.
+name: Hook version bump
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/hooks/**'
+      - 'plugins/*/scripts/hooks/**'
+
+jobs:
+  require-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a version bump alongside the hook change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base_version=$(git show "$BASE:package.json" | jq -r .version)
+          head_version=$(git show "$HEAD:package.json" | jq -r .version)
+
+          if [ "$base_version" = "$head_version" ]; then
+            echo "::error::This PR changes a hook script but leaves the version at" \
+                 "$head_version. Plugin caches are keyed by version, so existing" \
+                 "installs would keep running the old script. Bump the version in" \
+                 "package.json and re-run 'ai-sdlc plugin build'."
+            exit 1
+          fi
+
+          echo "Version bumped: $base_version -> $head_version"
+
+      - name: Require the generated plugin tree to match
+        run: |
+          pkg=$(jq -r .version package.json)
+          plugin=$(jq -r .version plugins/ai-sdlc/.claude-plugin/plugin.json)
+          market=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+
+          if [ "$pkg" != "$plugin" ] || [ "$pkg" != "$market" ]; then
+            echo "::error::Version mismatch: package.json=$pkg" \
+                 "plugin.json=$plugin marketplace.json=$market." \
+                 "Run 'ai-sdlc plugin build' and commit the result."
+            exit 1
+          fi
+
+          echo "All manifests agree: $pkg"
