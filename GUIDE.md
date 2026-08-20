@@ -47,6 +47,30 @@ To check it worked, type `/plugin` and look for `ai-sdlc` in the list.
 > per project rather than installed once — see *Set up for Codex* at the end.
 > Everything in *Use it* below is the same, approval included.
 
+## Update it
+
+Two steps, and the first one alone does nothing:
+
+```
+/plugin marketplace update ai-sdlc-marketplace
+/plugin update ai-sdlc@ai-sdlc-marketplace
+```
+
+Step one refreshes the copy of this repo on your machine and reports success.
+Step two is what actually changes the code that runs, because the plugin is
+cached per version and the cache is what executes. Skipping it leaves you on the
+old version no matter how many times you restart.
+
+Name the marketplace in step two. Bare `/plugin update ai-sdlc` answers `Plugin
+not found`.
+
+Restart Claude Code afterwards — a session loads its plugins at startup.
+
+A release that fixes a guard script always carries a new version number, so
+there is a fresh cache entry to install. Two fixes in 0.1.0 did not, and never
+reached anyone who had already installed it; CI now fails a hook change that
+leaves the version alone.
+
 ## Use it
 
 Say what you want built, and give it a short name to refer to later:
@@ -114,6 +138,7 @@ If it seems stuck waiting, it's probably waiting for you.
 | The spec is too big | Ask it to split into smaller epics, one feature each |
 | Nothing happens after `/epic-flow` | Restart Claude Code, then check `/plugin` lists it |
 | `Marketplace ... not found` | You added the marketplace in a different client — run `/plugin marketplace add cedyx/ai-sdlc` here too |
+| A fix you were told about is missing | Run *both* update lines above, then restart — refreshing the marketplace alone does not change the running code |
 | `/plugin` isn't a command | You are in an IDE extension or SDK session; plugins are managed from the Claude Code CLI or desktop app |
 
 ## What it will not do for you

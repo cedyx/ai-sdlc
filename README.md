@@ -88,6 +88,17 @@ claude plugin install ai-sdlc@ai-sdlc-marketplace
 The slash-command equivalent, and why both lines must run in the same client,
 are in [*Add it (one time)*](GUIDE.md#add-it-one-time).
 
+Updating later takes two commands, not one:
+
+```bash
+claude plugin marketplace update ai-sdlc-marketplace
+claude plugin update ai-sdlc@ai-sdlc-marketplace
+```
+
+The first refreshes the checkout; the second installs it. Only the second
+changes what runs, because the plugin cache is keyed by version and the cached
+copy is what executes — see [*Update it*](GUIDE.md#update-it).
+
 You get both agents, the `epic-flow` skill, and the guard scripts. The consuming
 repo needs no `.ai/`, no `.claude/`, and no `node_modules`.
 
