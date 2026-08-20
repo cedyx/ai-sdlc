@@ -1,6 +1,6 @@
 {
   "name": "ai-sdlc",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Provider-neutral agent SDLC pipeline: one source of truth compiled to Claude Code and Codex",
   "license": "MIT",
   "repository": {

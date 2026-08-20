@@ -18,3 +18,9 @@ requirements:
     write_paths.deny: [native, advisory]
     shell: [native, advisory]
     vcs_mutate: [native, advisory]
+
+# This repo keeps the strict path: it ships the gate, so it is the one place the
+# gate must actually run. `chat` is the default for consuming repos, not here.
+approval:
+  mode: artifact
+  ci_gate: true

@@ -61,6 +61,36 @@ export type TargetRequirements = z.infer<typeof TargetRequirements>;
 export const Requirements = z.object({ codex: TargetRequirements }).strict().partial();
 export type Requirements = z.infer<typeof Requirements>;
 
+/**
+ * How approval is recorded, and whether the CI gate is emitted.
+ *
+ * `chat` exists because the artifact ceremony is disproportionate for a
+ * single-maintainer repo: the orchestrator records the approval itself from the
+ * human's assent in conversation, so there is one stop instead of a stop plus a
+ * command. It still writes `approved_by`, so `status` keeps meaning what it says
+ * and switching to `artifact` later needs no migration.
+ *
+ * What `chat` gives up is the evidence, not the field: the approver is
+ * self-attested by the agent, so `approved_by` stops being proof a human read
+ * the specification. Use `artifact` wherever a second person relies on it.
+ */
+export const ApprovalConfig = z
+  .object({
+    mode: z.enum(['chat', 'artifact']).default('chat'),
+    /**
+     * Whether `generate` emits `.github/workflows/approval-gate.yml`.
+     *
+     * Off by default because the gate blocks every pull request that does not
+     * name an approved epic, which is a repo-wide policy and not a sane thing to
+     * acquire by running a scaffolder. Opting in is one line; discovering it
+     * from a red check on unrelated work is not.
+     */
+    ci_gate: z.boolean().default(false),
+  })
+  .strict()
+  .default({});
+export type ApprovalConfig = z.infer<typeof ApprovalConfig>;
+
 export const Config = z
   .object({
     providers: z
@@ -69,6 +99,7 @@ export const Config = z
       .default(['claude', 'codex']),
     backlog: BacklogConfig,
     requirements: Requirements.optional(),
+    approval: ApprovalConfig,
   })
   .strict();
 export type Config = z.infer<typeof Config>;

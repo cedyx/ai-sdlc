@@ -45,9 +45,25 @@ workflow, and the same repo conventions work in either tool.
 ## The approval gate
 
 The epic artifact is the state machine. Implementation is gated on
-`status: APPROVED` plus a recorded approver — never on conversational assent.
-Any change that lets a role advance past the gate without reading the artifact
-is a bug, not a convenience.
+`status: APPROVED` plus a recorded approver, and reading the artifact is the only
+way to learn that. Any change that lets a role advance past the gate without
+reading it is a bug, not a convenience.
+
+`approval.mode` decides who writes that record, and it is the default that
+changed: under `chat` the orchestrator runs `ai-sdlc approve` on the human's
+behalf as soon as they assent, so there is one stop rather than a stop plus a
+command; under `artifact` the human runs it themselves. Both write the same
+field, so the gate and `ai-sdlc status` are untouched either way — the artifact
+still decides, and conversational assent still authorises nothing on its own.
+
+What `chat` costs is the evidentiary weight of `approved_by`, not its presence.
+The agent attests to the name, so the field records whose repo this is rather
+than who read the specification. That is a fair trade for a single maintainer and
+a bad one wherever a second person relies on the field; say which is meant rather
+than letting the field look equally authoritative in both. Never let the mode
+reach `isImplementable`, the `Epic` refinement, or the gate: a mode that changed
+what APPROVED *means* would make the exit code unreadable, which is the failure
+this file spends the rest of its length avoiding.
 
 Distinguish workflow separation from an enforcement boundary. Splitting the
 roles into two agents sequences the work and keeps each context small; it does
@@ -59,8 +75,13 @@ exits nonzero unless the artifact is APPROVED with a recorded approver, and
 CLI, where it is identical across providers, rather than in per-provider agent
 configuration.
 
-The CI check in `src/enforcement/` closes the loop by consuming that exit code,
-and its claim is narrower than it first reads:
+The CI check in `src/enforcement/` closes the loop by consuming that exit code
+wherever `approval.ci_gate` turns it on. It is off by default, because the check
+fails every pull request that does not name an approved epic — a repo-wide policy
+nobody should acquire as a side effect of running a scaffolder. `generate` emits
+the workflow only when asked, and never deletes one already committed: removing a
+required check because a config default changed would disable enforcement
+silently. When it is on, its claim is narrower than it first reads:
 
 > No pull request passes the approval gate unless it identifies an approved epic.
 

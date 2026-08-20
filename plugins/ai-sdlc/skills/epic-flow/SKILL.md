@@ -26,15 +26,25 @@ questions. Anything needing a human decision comes back through you.
 Delegate by role name. Each provider resolves the name to its own agent
 definition; do not depend on a particular dispatch syntax.
 
-## The gate is the artifact, not the conversation
+## The gate is the artifact; how it gets written depends on the mode
 
 Implementation is unblocked by one fact only: the epic's `status` field reads
 APPROVED. Check it by reading the artifact — `ai-sdlc status <id>` exits 0 when
-implementable, 1 when not, 2 when the epic does not exist.
+implementable, 1 when not, 2 when the epic does not exist. That is true in both
+modes, and it is the only thing you may treat as the gate.
 
-Never treat "the human seemed to agree" as approval, and never set APPROVED
-yourself on the strength of your own reading. Approval is recorded with an
-approver and a timestamp because it is an accountable act.
+What `approval.mode` in `.ai/config.yaml` changes is who runs the approve
+command, never whether the artifact decides:
+
+- **`chat`** (default) — the human approves in conversation and *you* record it
+  immediately with `ai-sdlc approve`. One stop, no second command for them.
+- **`artifact`** — the human runs `ai-sdlc approve` themselves. Their assent in
+  conversation authorises nothing until they do.
+
+In neither mode may you set APPROVED on the strength of your own reading. In
+`chat` mode you are recording someone else's decision, not making one; if you
+have not put the specification in front of them and had an answer back, there is
+nothing to record.
 
 ## Autonomy
 
@@ -75,8 +85,16 @@ another iteration, change the requirements, or cancel the epic.
    skipping this step cannot produce an approved epic; it can only produce
    unapproved work. Do not treat the check in step 3 as the thing that stopped
    you.
+
+   The stop is a hard one in both modes. `chat` mode removes the human's second
+   command, not the requirement that they answer — read `approval.mode` from
+   `.ai/config.yaml` and follow the matching branch.
    - Changes requested → set status CHANGES_REQUESTED, return to step 1.
-   - Approved → record it with `ai-sdlc approve <id> --by <name>`.
+   - Approved, `mode: chat` → run `ai-sdlc approve <id> --by <name>` yourself,
+     naming the human who approved. Take the name from `git config user.name`
+     when they have not given one; never record yourself as the approver.
+   - Approved, `mode: artifact` → ask them to run
+     `ai-sdlc approve <id> --by <name>`, and wait. Do not run it for them.
 
 3. **Implement.** Verify the gate (`ai-sdlc status <id>` exits 0), then delegate
    to `developer` with the full specification text.

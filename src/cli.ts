@@ -25,6 +25,7 @@ import { GitHubIssuesBacklog } from './backlog/github.js';
 import { makeBacklog } from './backlog/provider.js';
 
 const AI_DIR = '.ai';
+const CI_WORKFLOW = '.github/workflows/approval-gate.yml';
 
 async function loadConfig(root: string): Promise<Config> {
   const raw = await readFile(join(root, AI_DIR, 'config.yaml'), 'utf8');
@@ -89,12 +90,21 @@ async function generate(root: string, allowLossy: Set<string>): Promise<number> 
   if (config.providers.includes('claude')) await linkSkills(root, '.claude');
   if (config.providers.includes('codex')) await linkSkills(root, '.agents');
 
-  // Unconditional, and deliberately outside the provider branches: the gate
-  // constrains what enters the repository, which is true whichever agent wrote
-  // the code, or none. Making it provider-conditional would let removing a
-  // provider quietly remove the enforcement boundary.
-  const ci = generateCiWorkflow({ backlog: config.backlog.kind });
-  await write(root, ci.path, ci.content);
+  // Opt-in, but deliberately outside the provider branches: when the gate is
+  // wanted it constrains what enters the repository, which is true whichever
+  // agent wrote the code, or none. Making it provider-conditional would let
+  // removing a provider quietly remove the enforcement boundary; making it
+  // config-conditional is a policy choice the repo states once.
+  //
+  // Not removed when switched off. `generate` writes files, and deleting a
+  // committed workflow because a config default changed would disable a repo's
+  // required check as a side effect of an unrelated regeneration.
+  if (config.approval.ci_gate) {
+    const ci = generateCiWorkflow({ backlog: config.backlog.kind });
+    await write(root, ci.path, ci.content);
+  } else if (await exists(join(root, CI_WORKFLOW))) {
+    console.log(`  (approval.ci_gate is off; leaving existing ${CI_WORKFLOW} in place)`);
+  }
 
   if (config.providers.includes('codex')) reportCodexFidelity(agents);
 
@@ -192,6 +202,11 @@ async function status(root: string, id: string): Promise<number> {
   console.log('This exit code is the enforced gate. The stop before implementing');
   console.log('is a workflow convention — if code already exists, it was written');
   console.log('unapproved, not approved by bypass. Review it before it ships.');
+  if (config.approval.mode === 'chat') {
+    console.log('\napproval.mode is chat: the orchestrator records approval from your');
+    console.log('assent in conversation. This still writes an approver, so exit 0 keeps');
+    console.log('meaning approved — it is the evidence that weakens, not the field.');
+  }
   return 1;
 }
 
@@ -202,6 +217,13 @@ async function approve(root: string, id: string, by: string): Promise<number> {
     at: new Date().toISOString(),
   });
   console.log(`${epic.id} approved by ${by}`);
+  // Say it at the point of recording, where a reader can still act on it. In
+  // chat mode the agent runs this on the human's behalf, so the name it wrote
+  // attests to whose repo this is, not to who read the specification.
+  if (config.approval.mode === 'chat') {
+    console.log('(approval.mode is chat: approver is self-attested. Set mode to');
+    console.log(' artifact where someone else relies on this field.)');
+  }
   return 0;
 }
 
@@ -234,6 +256,30 @@ async function exists(path: string): Promise<boolean> {
  * obviously incomplete — a plausible-looking default would get shipped unread,
  * and every line here is compiled into CLAUDE.md and AGENTS.md.
  */
+const STARTER_CONFIG = `# Which provider adapters \`ai-sdlc generate\` emits, and where epics live.
+providers:
+  - claude
+  - codex
+
+backlog:
+  kind: filesystem
+  dir: .ai/epics
+
+# How approval is recorded, and whether the CI gate is emitted.
+#
+# \`mode: chat\` lets the orchestrator record approval from your assent in
+# conversation; it still writes an approver, so \`ai-sdlc status\` keeps meaning
+# what it says. Switch to \`artifact\` — you run \`ai-sdlc approve\` yourself —
+# wherever someone other than you relies on that field as evidence.
+#
+# \`ci_gate\` emits .github/workflows/approval-gate.yml, which fails any pull
+# request that does not name an approved epic. That is a repo-wide policy, so it
+# is opt-in rather than something a scaffolder leaves behind.
+approval:
+  mode: chat
+  ci_gate: false
+`;
+
 const STARTER_CONTRACT = `# Project contract
 
 Shared instructions for every AI agent working in this repository, regardless
@@ -267,18 +313,26 @@ async function init(root: string): Promise<number> {
     return 1;
   }
 
-  // The example epic and this project's own contract are artifacts of the
-  // ai-sdlc repo, not a starting point for a consuming one: seeding them would
-  // plant a fake epic and describe the wrong codebase.
+  // The example epic, this project's own contract, and its config are artifacts
+  // of the ai-sdlc repo, not a starting point for a consuming one: seeding them
+  // would plant a fake epic, describe the wrong codebase, and — because this
+  // repo ships the approval gate and so must run it — hand every consuming repo
+  // the strict path as if it had chosen it.
   await cp(join(PKG_ROOT, AI_DIR), aiDir, {
     recursive: true,
     filter: (src) => {
       const rel = relative(join(PKG_ROOT, AI_DIR), src);
-      return rel !== 'epics' && !rel.startsWith(`epics${sep}`) && rel !== 'contract.md';
+      return (
+        rel !== 'epics' &&
+        !rel.startsWith(`epics${sep}`) &&
+        rel !== 'contract.md' &&
+        rel !== 'config.yaml'
+      );
     },
   });
   await mkdir(join(aiDir, 'epics'), { recursive: true });
   await writeFile(join(aiDir, 'contract.md'), STARTER_CONTRACT, 'utf8');
+  await writeFile(join(aiDir, 'config.yaml'), STARTER_CONFIG, 'utf8');
   console.log(`  ${AI_DIR}/`);
 
   const hooks = join(root, 'scripts', 'hooks');
