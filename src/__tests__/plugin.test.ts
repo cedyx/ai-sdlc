@@ -13,6 +13,8 @@ import {
   generatePluginHooks,
   generatePluginManifest,
   generateMarketplaceManifest,
+  generateCodexPluginManifest,
+  generateCodexMarketplaceManifest,
 } from '../generators/plugin.js';
 
 const developer = AgentSpec.parse({
@@ -117,7 +119,7 @@ describe('plugin hooks', () => {
 describe('manifests', () => {
   const meta = { name: 'ai-sdlc', version: '0.1.0', description: 'd', author: 'a' };
 
-  it('emits the fields --strict validation requires', () => {
+  it('emits the fields Claude strict validation requires', () => {
     const plugin = JSON.parse(generatePluginManifest(meta));
     expect(plugin).toMatchObject({ name: 'ai-sdlc', version: '0.1.0', author: { name: 'a' } });
     expect(plugin.description).toBeTruthy();
@@ -126,6 +128,30 @@ describe('manifests', () => {
     expect(mk.owner).toEqual({ name: 'a' });
     expect(mk.description).toBeTruthy();
     expect(mk.plugins[0]).toMatchObject({ name: 'ai-sdlc', source: './plugins/ai-sdlc' });
+  });
+
+  it('emits the fields Codex plugin ingestion requires', () => {
+    const plugin = JSON.parse(generateCodexPluginManifest(meta));
+    expect(plugin).toMatchObject({
+      name: 'ai-sdlc',
+      version: '0.1.0',
+      author: { name: 'a' },
+      skills: './skills/',
+    });
+    expect(plugin).not.toHaveProperty('hooks');
+    expect(plugin.interface).toMatchObject({
+      displayName: 'ai-sdlc',
+      category: 'Productivity',
+    });
+
+    const mk = JSON.parse(generateCodexMarketplaceManifest(meta));
+    expect(mk.interface.displayName).toBe('ai-sdlc');
+    expect(mk.plugins[0]).toMatchObject({
+      name: 'ai-sdlc',
+      source: { source: 'local', path: './plugins/ai-sdlc' },
+      policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
+      category: 'Productivity',
+    });
   });
 });
 
@@ -162,6 +188,14 @@ describe('plugin build (CLI)', () => {
     const entry = marketplace.plugins[0]!;
     expect(existsSync(join(dir, entry.source, '.claude-plugin', 'plugin.json'))).toBe(true);
     expect(existsSync(join(dir, 'plugins', entry.name, 'skills', 'epic-flow', 'SKILL.md'))).toBe(
+      true,
+    );
+
+    const codexMarketplace = JSON.parse(
+      readFileSync(join(dir, '.agents', 'plugins', 'marketplace.json'), 'utf8'),
+    ) as { plugins: { name: string; source: { path: string } }[] };
+    const codexEntry = codexMarketplace.plugins[0]!;
+    expect(existsSync(join(dir, codexEntry.source.path, '.codex-plugin', 'plugin.json'))).toBe(
       true,
     );
   });

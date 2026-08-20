@@ -43,9 +43,10 @@ If a new session doesn't pick it up, restart Claude Code.
 
 To check it worked, type `/plugin` and look for `ai-sdlc` in the list.
 
-> **Using Codex instead of Claude Code?** It works there too, but it is set up
-> per project rather than installed once — see *Set up for Codex* at the end.
-> Everything in *Use it* below is the same, approval included.
+> **Using Codex instead of Claude Code?** It works there too. Install it with
+> `codex plugin marketplace add cedyx/ai-sdlc --ref main`, then
+> `codex plugin add ai-sdlc@ai-sdlc-marketplace`. Everything in *Use it* below
+> is the same, approval included.
 
 ## Update it
 
@@ -147,15 +148,20 @@ If it seems stuck waiting, it's probably waiting for you.
 - **Decide whether the feature is worth building.** That's your call.
 - **Replace review.** A human still reads the code before it ships.
 
-## Set up for Codex
+## Set Up For Codex
 
-Codex can install plugins, but we don't publish one for it. A Codex plugin
-can't ship the two separate roles, so installing it would give you the workflow
-without the analyst and the developer as distinct participants. Setting it up
-per project keeps them separate.
+Codex can install the plugin directly:
 
-The approval step is unaffected either way — that check lives in the tool, not
-in how the roles are arranged.
+```bash
+codex plugin marketplace add cedyx/ai-sdlc --ref main
+codex plugin add ai-sdlc@ai-sdlc-marketplace
+```
+
+That gives Codex the shared `epic-flow` workflow skill. The approval step is
+unaffected — that check lives in the tool, not in how the roles are arranged.
+
+If you also want the business analyst and developer as separate native Codex
+agents, set it up per project:
 
 In a terminal, in your project folder:
 
@@ -165,8 +171,8 @@ npx github:cedyx/ai-sdlc generate
 ```
 
 Then commit the files it created. After that, use it exactly as described
-above. If those two commands mean nothing to you, this is the one part worth
-asking a developer for — it is a five-minute job and only happens once.
+above. If those commands mean nothing to you, this is the one part worth asking
+a developer for — it is a five-minute job and only happens once.
 
 ## Getting it out of the way
 
