@@ -47,6 +47,31 @@ describe('block-vcs-mutations hook', () => {
     }
   });
 
+  // A read-only search whose *pattern* names a mutation is not a mutation. The
+  // separator class in the regex matched the `|` inside the quoted argument, so
+  // grepping the repo for this guard's own denial text tripped it.
+  it('allows a mutation verb that appears inside a quoted argument', () => {
+    const commands = [
+      'grep -n -i "hook|git commit|machine-wide" README.md',
+      `grep -rn 'git push' src/`,
+      'grep -rn x . | grep -v "git push"',
+    ];
+    for (const command of commands) {
+      expect(run({ agent_id: SUBAGENT, tool_input: { command } }).code).toBe(0);
+    }
+  });
+
+  it('still denies a mutation that follows a quoted argument', () => {
+    const command = 'echo "note" && git commit -m "msg"';
+    expect(run({ agent_id: SUBAGENT, tool_input: { command } }).code).toBe(2);
+  });
+
+  // Naming the source turns an opaque denial into a findable one.
+  it('names the plugin and script in the denial', () => {
+    const r = run({ agent_id: SUBAGENT, tool_input: { command: 'git commit -m x' } });
+    expect(r.stderr).toMatch(/ai-sdlc plugin \(block-vcs-mutations\.sh\)/);
+  });
+
   it('ignores a payload carrying no command', () => {
     expect(run({ agent_id: SUBAGENT, tool_input: {} }).code).toBe(0);
   });

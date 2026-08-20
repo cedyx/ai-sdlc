@@ -16,9 +16,13 @@ command=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty')
 agent_id=$(printf '%s' "$payload" | jq -r '.agent_id // empty')
 [ -z "$agent_id" ] && exit 0
 
+# Quoted arguments are stripped first: a mutation verb inside one is data,
+# not a command position, so searching for the literal is not a mutation.
+unquoted=$(printf '%s' "$command" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
+
 # Matches the verb after `git`, tolerating global flags such as -C <dir>.
-if printf '%s' "$command" | grep -Eq '(^|[;&|]|\$\()[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(commit|push|tag|merge|rebase|reset|cherry-pick|revert)\b'; then
-  echo "VCS mutation denied: committing and releasing belong to the orchestrator. Leave changes in the working tree." >&2
+if printf '%s' "$unquoted" | grep -Eq '(^|[;&|]|\$\()[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(commit|push|tag|merge|rebase|reset|cherry-pick|revert)\b'; then
+  echo "VCS mutation denied by the ai-sdlc plugin (block-vcs-mutations.sh): committing and releasing belong to the orchestrator. Leave changes in the working tree." >&2
   exit 2
 fi
 
