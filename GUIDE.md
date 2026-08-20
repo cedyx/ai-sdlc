@@ -21,8 +21,23 @@ and type:
 
 ```
 /plugin marketplace add cedyx/ai-sdlc
-/plugin install ai-sdlc
+/plugin install ai-sdlc@ai-sdlc-marketplace
 ```
+
+Prefer a terminal? The same two steps are:
+
+```bash
+claude plugin marketplace add cedyx/ai-sdlc
+claude plugin install ai-sdlc@ai-sdlc-marketplace
+```
+
+Pick one form or the other — they do the same thing.
+
+Whichever you pick, run *both* lines in the same client. Marketplaces are
+registered per client, not per account: adding one in the desktop app does not
+add it to the CLI, or the other way round. A client that never ran the `add`
+line reports `Marketplace "ai-sdlc-marketplace" not found` on install, even
+though the add succeeded somewhere else.
 
 If a new session doesn't pick it up, restart Claude Code.
 
@@ -98,7 +113,8 @@ If it seems stuck waiting, it's probably waiting for you.
 | It asks a question you can't answer | Say "assume X for now and flag it" — assumptions get written down |
 | The spec is too big | Ask it to split into smaller epics, one feature each |
 | Nothing happens after `/epic-flow` | Restart Claude Code, then check `/plugin` lists it |
-| `/plugin install` can't find it | Check the marketplace line ran without an error first |
+| `Marketplace ... not found` | You added the marketplace in a different client — run `/plugin marketplace add cedyx/ai-sdlc` here too |
+| `/plugin` isn't a command | You are in an IDE extension or SDK session; plugins are managed from the Claude Code CLI or desktop app |
 
 ## What it will not do for you
 

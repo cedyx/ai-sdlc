@@ -82,8 +82,11 @@ This repo *is* a plugin marketplace. Nothing to clone, build, or npm-install:
 
 ```bash
 claude plugin marketplace add cedyx/ai-sdlc
-claude plugin install ai-sdlc
+claude plugin install ai-sdlc@ai-sdlc-marketplace
 ```
+
+The slash-command equivalent, and why both lines must run in the same client,
+are in [*Add it (one time)*](GUIDE.md#add-it-one-time).
 
 You get both agents, the `epic-flow` skill, and the guard scripts. The consuming
 repo needs no `.ai/`, no `.claude/`, and no `node_modules`.

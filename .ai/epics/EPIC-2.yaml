@@ -1,0 +1,30 @@
+id: EPIC-2
+title: Document per-client plugin marketplace registration
+status: APPROVED
+stories:
+  - id: S1
+    text: As someone installing the plugin, I want the docs to tell me where to run
+      the install commands, so that adding the marketplace in one client and
+      installing in another does not read as a broken plugin.
+    acceptance_criteria:
+      - id: AC1
+        text: Given the install instructions, when read from either the terminal or
+          Claude Code, then both command forms are shown and named as
+          equivalent.
+      - id: AC2
+        text: Given an install that reports the marketplace as not found, when the
+          reader consults the troubleshooting table, then it names the
+          per-client cause rather than a failed add.
+      - id: AC3
+        text: Given README and GUIDE both cover installation, when the shared
+          explanation changes, then it is edited in one place because README
+          links to GUIDE rather than restating it.
+out_of_scope:
+  - Changing the marketplace manifest, plugin tree, or install mechanism.
+  - Verifying the plugin actually loads once installed.
+non_functional: []
+compliance_flags: []
+open_questions: []
+approval:
+  approved_by: yse
+  approved_at: 2026-08-20T03:04:22.512Z
